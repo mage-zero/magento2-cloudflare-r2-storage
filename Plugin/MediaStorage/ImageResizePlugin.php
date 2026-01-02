@@ -5,6 +5,9 @@ use MageZero\CloudflareR2\Model\Config;
 use MageZero\CloudflareR2\Model\MediaStorage\ImageCacheSynchronizer;
 use Magento\MediaStorage\Service\ImageResize;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 class ImageResizePlugin
 {
     private Config $config;

@@ -8,6 +8,9 @@ use Magento\MediaStorage\Model\File\Storage\Synchronization;
 use MageZero\CloudflareR2\Model\Config;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 class SynchronizationPlugin
 {
     private Config $config;

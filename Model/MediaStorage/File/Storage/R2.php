@@ -13,6 +13,9 @@ use MageZero\CloudflareR2\Model\KeyFormatter;
 use MageZero\CloudflareR2\Model\R2ClientFactory;
 use Psr\Log\LoggerInterface;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 class R2 extends DataObject
 {
     private ?string $mediaBaseDirectory = null;

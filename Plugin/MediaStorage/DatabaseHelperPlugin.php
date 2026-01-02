@@ -6,6 +6,9 @@ use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 use Magento\MediaStorage\Helper\File\Storage\Database;
 use Magento\MediaStorage\Model\File\Storage\DatabaseFactory;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 class DatabaseHelperPlugin
 {
     private Config $config;

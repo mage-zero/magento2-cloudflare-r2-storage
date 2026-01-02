@@ -7,6 +7,9 @@ use MageZero\CloudflareR2\Plugin\MediaStorage\ImageResizePlugin;
 use Magento\MediaStorage\Service\ImageResize;
 use PHPUnit\Framework\TestCase;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 class ImageResizePluginTest extends TestCase
 {
     public function testAroundResizeFromThemesRunsSyncAfterIteration(): void

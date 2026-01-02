@@ -6,6 +6,9 @@ use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 use Magento\MediaStorage\Helper\File\Storage as StorageHelper;
 use Magento\MediaStorage\Model\File\Storage;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 class StorageModelPlugin
 {
     private StorageHelper $storageHelper;

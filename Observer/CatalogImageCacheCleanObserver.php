@@ -8,6 +8,9 @@ use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
 use Psr\Log\LoggerInterface;
 
+/**
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ */
 class CatalogImageCacheCleanObserver implements ObserverInterface
 {
     private Config $config;
