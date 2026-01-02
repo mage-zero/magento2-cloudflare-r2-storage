@@ -7,7 +7,6 @@ use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 use MageZero\CloudflareR2\Plugin\MediaStorage\DatabaseHelperPlugin;
 use Magento\MediaStorage\Helper\File\Storage\Database;
 use Magento\MediaStorage\Model\File\Storage\Database as DatabaseStorage;
-use Magento\MediaStorage\Model\File\Storage\DatabaseFactory;
 use Magento\MediaStorage\Model\File\Storage\File as FileStorage;
 use PHPUnit\Framework\TestCase;
 
@@ -18,19 +17,16 @@ class DatabaseHelperPluginTest extends TestCase
 {
     private Config $config;
     private R2Factory $r2Factory;
-    private DatabaseFactory $dbStorageFactory;
     private DatabaseHelperPlugin $plugin;
 
     protected function setUp(): void
     {
         $this->config = $this->createMock(Config::class);
         $this->r2Factory = $this->createMock(R2Factory::class);
-        $this->dbStorageFactory = $this->createMock(DatabaseFactory::class);
 
         $this->plugin = new DatabaseHelperPlugin(
             $this->config,
-            $this->r2Factory,
-            $this->dbStorageFactory
+            $this->r2Factory
         );
     }
 
@@ -64,53 +60,47 @@ class DatabaseHelperPluginTest extends TestCase
         $this->assertTrue($result);
     }
 
-    public function testAroundGetStorageDatabaseModelReturnsR2WhenR2Selected(): void
+    public function testAfterGetStorageDatabaseModelReturnsR2WhenR2Selected(): void
     {
         $subject = $this->createMock(Database::class);
-        $subject->method('checkDbUsage')->willReturn(true);
         $this->config->method('isR2Selected')->willReturn(true);
 
         $r2Model = $this->createMock(R2::class);
         $this->r2Factory->expects($this->once())->method('create')->willReturn($r2Model);
-        $this->dbStorageFactory->expects($this->never())->method('create');
 
-        $proceed = fn() => $this->fail('Proceed should not be called');
+        $originalResult = $this->createMock(DatabaseStorage::class);
 
-        $result = $this->plugin->aroundGetStorageDatabaseModel($subject, $proceed);
+        $result = $this->plugin->afterGetStorageDatabaseModel($subject, $originalResult);
 
         $this->assertSame($r2Model, $result);
     }
 
-    public function testAroundGetStorageDatabaseModelReturnsDatabaseWhenR2NotSelected(): void
+    public function testAfterGetStorageDatabaseModelReturnsOriginalWhenR2NotSelected(): void
     {
         $subject = $this->createMock(Database::class);
-        $subject->method('checkDbUsage')->willReturn(true);
         $this->config->method('isR2Selected')->willReturn(false);
 
-        $dbModel = $this->createMock(DatabaseStorage::class);
-        $this->dbStorageFactory->expects($this->once())->method('create')->willReturn($dbModel);
         $this->r2Factory->expects($this->never())->method('create');
 
-        $proceed = fn() => $this->fail('Proceed should not be called');
+        $originalResult = $this->createMock(DatabaseStorage::class);
 
-        $result = $this->plugin->aroundGetStorageDatabaseModel($subject, $proceed);
+        $result = $this->plugin->afterGetStorageDatabaseModel($subject, $originalResult);
 
-        $this->assertSame($dbModel, $result);
+        $this->assertSame($originalResult, $result);
     }
 
-    public function testAroundGetStorageDatabaseModelCachesResult(): void
+    public function testAfterGetStorageDatabaseModelCachesR2Model(): void
     {
         $subject = $this->createMock(Database::class);
-        $subject->method('checkDbUsage')->willReturn(true);
         $this->config->method('isR2Selected')->willReturn(true);
 
         $r2Model = $this->createMock(R2::class);
         $this->r2Factory->expects($this->once())->method('create')->willReturn($r2Model);
 
-        $proceed = fn() => $this->fail('Proceed should not be called');
+        $originalResult = $this->createMock(DatabaseStorage::class);
 
-        $result1 = $this->plugin->aroundGetStorageDatabaseModel($subject, $proceed);
-        $result2 = $this->plugin->aroundGetStorageDatabaseModel($subject, $proceed);
+        $result1 = $this->plugin->afterGetStorageDatabaseModel($subject, $originalResult);
+        $result2 = $this->plugin->afterGetStorageDatabaseModel($subject, $originalResult);
 
         $this->assertSame($result1, $result2);
     }

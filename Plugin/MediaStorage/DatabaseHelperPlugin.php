@@ -2,9 +2,9 @@
 namespace MageZero\CloudflareR2\Plugin\MediaStorage;
 
 use MageZero\CloudflareR2\Model\Config;
+use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 use Magento\MediaStorage\Helper\File\Storage\Database;
-use Magento\MediaStorage\Model\File\Storage\DatabaseFactory;
 
 /**
  * @SuppressWarnings(PHPMD.UnusedFormalParameter)
@@ -13,17 +13,14 @@ class DatabaseHelperPlugin
 {
     private Config $config;
     private R2Factory $r2Factory;
-    private DatabaseFactory $dbStorageFactory;
-    private $storageModel = null;
+    private ?R2 $r2StorageModel = null;
 
     public function __construct(
         Config $config,
-        R2Factory $r2Factory,
-        DatabaseFactory $dbStorageFactory
+        R2Factory $r2Factory
     ) {
         $this->config = $config;
         $this->r2Factory = $r2Factory;
-        $this->dbStorageFactory = $dbStorageFactory;
     }
 
     public function afterCheckDbUsage(Database $subject, $result)
@@ -35,17 +32,16 @@ class DatabaseHelperPlugin
         return $result;
     }
 
-    public function aroundGetStorageDatabaseModel(Database $subject, callable $proceed)
+    public function afterGetStorageDatabaseModel(Database $subject, $result)
     {
-        if ($this->storageModel === null) {
-            if ($subject->checkDbUsage() && $this->config->isR2Selected()) {
-                $this->storageModel = $this->r2Factory->create();
-            } else {
-                $this->storageModel = $this->dbStorageFactory->create();
+        if ($this->config->isR2Selected()) {
+            if ($this->r2StorageModel === null) {
+                $this->r2StorageModel = $this->r2Factory->create();
             }
+            return $this->r2StorageModel;
         }
 
-        return $this->storageModel;
+        return $result;
     }
 
     public function aroundSaveFileToFilesystem(Database $subject, callable $proceed, $filename)
