@@ -5,42 +5,23 @@ on:
   workflow_dispatch:
 
 jobs:
-  r2-integration:
-    name: R2 Integration Tests
+  integration-tests:
+    name: Magento 2 Integration Tests
     runs-on: ubuntu-latest
     env:
-      R2_BUCKET: ${{ secrets.R2_BUCKET }}
-      R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
-      R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.2'
+            magento: '2.4.7-p4'
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
+      - name: Integration tests (Magento ${{ matrix.magento }}, PHP ${{ matrix.php }})
+        uses: extdn/github-actions-m2/magento-integration-tests/${{ matrix.php }}@master
         with:
-          php-version: '8.3'
-          extensions: json, curl
-          coverage: none
-
-      - name: Create standalone composer for integration tests
-        run: |
-          cat > composer-integration.json << 'JSONEOF'
-          {
-            "require": {
-              "aws/aws-sdk-php": "^3.0",
-              "phpunit/phpunit": "^10.0"
-            },
-            "autoload": {
-              "psr-4": {
-                "MageZero\\CloudflareR2\\Test\\Integration\\": "Test/Integration/"
-              }
-            }
-          }
-          JSONEOF
-
-      - name: Install dependencies
-        run: COMPOSER=composer-integration.json composer install --no-interaction
-
-      - name: Run R2 integration tests
-        run: vendor/bin/phpunit Test/Integration --colors=always
+          module_name: MageZero_CloudflareR2
+          composer_name: magezero/magento2-cloudflare-r2-storage
+          magento_version: ${{ matrix.magento }}
