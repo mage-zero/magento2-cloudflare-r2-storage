@@ -74,7 +74,8 @@ class SynchronizationPlugin
         try {
             // Use HEAD request to check existence without downloading content
             $this->httpClient->setOptions(['timeout' => 5]);
-            $this->httpClient->request('HEAD', $cdnUrl);
+            $this->httpClient->setOption(CURLOPT_NOBODY, true);
+            $this->httpClient->get($cdnUrl);
             $statusCode = $this->httpClient->getStatus();
             $exists = $statusCode === 200;
 

@@ -57,7 +57,6 @@ class ImageCacheSynchronizerTest extends TestCase
         $this->config->method('isR2Selected')->willReturn(true);
         $this->mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
         $this->mediaDirectory->method('isDirectory')
-            ->with('catalog/product/cache')
             ->willReturn(false);
 
         $this->r2Storage->expects($this->never())->method('saveFile');
@@ -108,8 +107,9 @@ class ImageCacheSynchronizerTest extends TestCase
         $this->mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
 
         $this->mediaDirectory->method('isDirectory')
-            ->with('catalog/product/cache')
-            ->willReturn(true);
+            ->willReturnCallback(function ($path) {
+                return $path === 'catalog/product/cache';
+            });
 
         $this->mediaDirectory->method('read')
             ->willThrowException(new \Exception('Read error'));
@@ -129,11 +129,14 @@ class ImageCacheSynchronizerTest extends TestCase
         $this->mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
 
         $this->mediaDirectory->method('isDirectory')
-            ->with('catalog/product/cache')
-            ->willReturn(true);
+            ->willReturnCallback(function ($path) {
+                return $path === 'catalog/product/cache';
+            });
 
         $this->mediaDirectory->method('isFile')
-            ->willReturn(true);
+            ->willReturnCallback(function ($path) {
+                return $path === 'catalog/product/cache/image.jpg';
+            });
 
         $this->mediaDirectory->method('read')
             ->willReturn(['catalog/product/cache/image.jpg']);
