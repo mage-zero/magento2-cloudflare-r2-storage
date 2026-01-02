@@ -19,7 +19,7 @@ class R2StorageOperationsTest extends TestCase
 {
     private static ?S3Client $client = null;
     private static ?string $bucket = null;
-    private static string $testPrefix = '';
+    private static ?string $testPrefix = null;
 
     public static function setUpBeforeClass(): void
     {
@@ -53,7 +53,7 @@ class R2StorageOperationsTest extends TestCase
 
     public static function tearDownAfterClass(): void
     {
-        if (self::$client === null || self::$bucket === null) {
+        if (self::$client === null || self::$bucket === null || self::$testPrefix === null) {
             return;
         }
 
