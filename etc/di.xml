@@ -35,4 +35,8 @@
     <type name="Magento\Swatches\Helper\Media">
         <plugin name="magezero_r2_swatches_media" type="MageZero\CloudflareR2\Plugin\Swatches\MediaPlugin"/>
     </type>
+
+    <type name="Magento\Catalog\Model\Product\Image\Cache">
+        <plugin name="magezero_r2_product_image_cache" type="MageZero\CloudflareR2\Plugin\Catalog\Product\Image\CachePlugin"/>
+    </type>
 </config>

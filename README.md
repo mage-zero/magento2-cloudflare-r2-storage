@@ -81,6 +81,22 @@ For Docker/containerized deployments where `pub/media` is mounted read-only:
 - Redis or similar cache backend recommended for file existence caching
 - `/tmp` directory must be writable (standard in containers)
 
+**Product Image Resizing:**
+
+Read-only mode supports two approaches for product image resizing:
+
+1. **Pre-generation (Recommended)**: Run `bin/magento catalog:images:resize` before deployment to generate all image sizes in R2. Images are processed in `/tmp` and uploaded directly.
+
+2. **On-demand Resizing**: Missing image sizes are generated automatically on first request:
+   - User requests missing size
+   - Module downloads original from R2 → `/tmp`
+   - Resizes in `/tmp`
+   - Uploads to R2
+   - Redirects to CDN URL
+   - Subsequent requests served directly from CDN (cached)
+
+**Best Practice**: Pre-generate during deployment, rely on on-demand as fallback for edge cases.
+
 ## Notes
 - The module uses path-style endpoints by default, which is recommended for R2.
 - Resized images generated via `bin/magento catalog:images:resize` are synced to R2 when Cloudflare R2 is the active media storage.
