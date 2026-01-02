@@ -58,4 +58,110 @@ class ConfigTest extends TestCase
         $config = new Config($scopeConfig);
         $this->assertSame('auto', $config->getRegion());
     }
+
+    public function testIsReadOnlyModeReturnsTrueWhenEnabled(): void
+    {
+        $values = [
+            Config::XML_PATH_STORAGE_MEDIA => 2,
+            Config::XML_PATH_READ_ONLY_MODE => '1',
+        ];
+
+        $scopeConfig = $this->createMock(ScopeConfigInterface::class);
+        $scopeConfig->method('getValue')->willReturnCallback(
+            static function (string $path) use ($values) {
+                return $values[$path] ?? null;
+            }
+        );
+
+        $config = new Config($scopeConfig);
+        $this->assertTrue($config->isReadOnlyMode());
+    }
+
+    public function testIsReadOnlyModeReturnsFalseWhenR2NotSelected(): void
+    {
+        $values = [
+            Config::XML_PATH_STORAGE_MEDIA => 0,
+            Config::XML_PATH_READ_ONLY_MODE => '1',
+        ];
+
+        $scopeConfig = $this->createMock(ScopeConfigInterface::class);
+        $scopeConfig->method('getValue')->willReturnCallback(
+            static function (string $path) use ($values) {
+                return $values[$path] ?? null;
+            }
+        );
+
+        $config = new Config($scopeConfig);
+        $this->assertFalse($config->isReadOnlyMode());
+    }
+
+    public function testGetCacheTtlReturnsConfiguredValue(): void
+    {
+        $values = [
+            Config::XML_PATH_CACHE_TTL => '7200',
+        ];
+
+        $scopeConfig = $this->createMock(ScopeConfigInterface::class);
+        $scopeConfig->method('getValue')->willReturnCallback(
+            static function (string $path) use ($values) {
+                return $values[$path] ?? null;
+            }
+        );
+
+        $config = new Config($scopeConfig);
+        $this->assertSame(7200, $config->getCacheTtl());
+    }
+
+    public function testGetCacheTtlReturnsDefaultWhenNotConfigured(): void
+    {
+        $values = [
+            Config::XML_PATH_CACHE_TTL => '0',
+        ];
+
+        $scopeConfig = $this->createMock(ScopeConfigInterface::class);
+        $scopeConfig->method('getValue')->willReturnCallback(
+            static function (string $path) use ($values) {
+                return $values[$path] ?? null;
+            }
+        );
+
+        $config = new Config($scopeConfig);
+        $this->assertSame(Config::DEFAULT_CACHE_TTL, $config->getCacheTtl());
+    }
+
+    public function testGetBaseMediaUrlReturnsSecureUrl(): void
+    {
+        $values = [
+            Config::XML_PATH_BASE_MEDIA_URL_SECURE => 'https://media.example.com/',
+            Config::XML_PATH_BASE_MEDIA_URL_UNSECURE => 'http://media.example.com/',
+        ];
+
+        $scopeConfig = $this->createMock(ScopeConfigInterface::class);
+        $scopeConfig->method('getValue')->willReturnCallback(
+            static function (string $path) use ($values) {
+                return $values[$path] ?? null;
+            }
+        );
+
+        $config = new Config($scopeConfig);
+        $this->assertSame('https://media.example.com', $config->getBaseMediaUrl());
+    }
+
+    public function testGetBaseMediaUrlFallsBackToUnsecure(): void
+    {
+        $values = [
+            Config::XML_PATH_BASE_MEDIA_URL_SECURE => '',
+            Config::XML_PATH_BASE_MEDIA_URL_UNSECURE => 'http://media.example.com/',
+        ];
+
+        $scopeConfig = $this->createMock(ScopeConfigInterface::class);
+        $scopeConfig->method('getValue')->willReturnCallback(
+            static function (string $path) use ($values) {
+                return $values[$path] ?? null;
+            }
+        );
+
+        $config = new Config($scopeConfig);
+        $this->assertSame('http://media.example.com', $config->getBaseMediaUrl());
+    }
 }

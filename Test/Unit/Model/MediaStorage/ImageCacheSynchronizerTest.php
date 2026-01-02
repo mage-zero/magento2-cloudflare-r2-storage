@@ -39,10 +39,38 @@ class ImageCacheSynchronizerTest extends TestCase
         $synchronizer->sync();
     }
 
+    public function testSyncSkipsWhenReadOnlyMode(): void
+    {
+        $config = $this->createMock(Config::class);
+        $config->method('isR2Selected')->willReturn(true);
+        $config->method('isReadOnlyMode')->willReturn(true);
+
+        $mediaConfig = $this->createMock(MediaConfig::class);
+        $mediaDirectory = $this->createMock(Write::class);
+        $filesystem = $this->createMock(Filesystem::class);
+        $filesystem->method('getDirectoryWrite')->with(DirectoryList::MEDIA)->willReturn($mediaDirectory);
+
+        $storageDatabase = $this->createMock(StorageDatabase::class);
+        $storageDatabase->expects($this->never())->method('saveFile');
+
+        $logger = $this->createMock(LoggerInterface::class);
+
+        $synchronizer = new ImageCacheSynchronizer(
+            $config,
+            $mediaConfig,
+            $filesystem,
+            $storageDatabase,
+            $logger
+        );
+
+        $synchronizer->sync();
+    }
+
     public function testSyncUploadsCacheFiles(): void
     {
         $config = $this->createMock(Config::class);
         $config->method('isR2Selected')->willReturn(true);
+        $config->method('isReadOnlyMode')->willReturn(false);
 
         $mediaConfig = $this->createMock(MediaConfig::class);
         $mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
