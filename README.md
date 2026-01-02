@@ -1,6 +1,6 @@
 # MageZero Cloudflare R2 Storage for Magento 2
 
-Magento 2 module that adds Cloudflare R2 as a media storage backend using the S3 compatible API.
+Stateless Magento 2 module for Cloudflare R2 media storage. Designed for containerized deployments where images are served directly from R2/CDN without local filesystem writes.
 
 ## Compatibility
 
@@ -23,11 +23,13 @@ PHPStan runs on PHP 8.3 and 8.4 for static analysis.
 Integration tests run once per Magento version to verify R2 functionality.
 
 ## Features
-- Adds a "Cloudflare R2 (S3 Compatible)" option to media storage configuration.
-- Uploads media files to R2 on save/synchronize.
-- Restores media files from R2 when required by Magento.
-- Handles WYSIWYG thumbnails and swatch images while using remote storage.
-- **Read-Only Filesystem Mode** - Serve images directly from R2/CDN without local filesystem writes (ideal for containerized/stateless deployments).
+- **Stateless/CDN-First Architecture** - Images served directly from R2/CDN, no local filesystem writes
+- **Automatic On-Demand Generation** - Missing image sizes generated transparently when requested
+- **Pre-Generation Support** - CLI command to generate all image sizes before deployment
+- **Redis Caching** - CDN file existence checks cached for optimal performance
+- **Docker/Kubernetes Ready** - Designed for ephemeral containers with read-only filesystems
+- Handles product images, WYSIWYG media, and swatch generation in `/tmp`
+- S3-compatible API with Cloudflare R2 optimizations
 
 ## Installation
 Install with Composer in your Magento project:
@@ -41,53 +43,52 @@ bin/magento cache:flush
 
 ## Configuration
 
-### Basic Configuration
-1. Go to **Stores > Configuration > Advanced > System > Media Storage Configuration** and set **Media Storage** to **Cloudflare R2 (S3 Compatible)**.
-2. Go to **Stores > Configuration > MageZero > Cloudflare R2 Storage** and fill in:
-   - Account ID (optional if you provide endpoint)
-   - Endpoint (e.g. https://<account-id>.r2.cloudflarestorage.com)
-   - Region (use `auto` for R2)
-   - Bucket
-   - Access Key ID / Secret Access Key
-   - Optional key prefix (e.g. `media`)
-   - **Base Media URL (unsecure/secure)** - Set this to your R2 public domain or CDN URL
-3. Save config and run **Synchronize** from Media Storage Configuration if you want to push existing media to R2.
+1. **Configure R2 Connection**:
+   - Go to **Stores > Configuration > Advanced > System > Media Storage Configuration**
+   - Set **Media Storage** to **Cloudflare R2 (S3 Compatible)**
 
-### Read-Only Filesystem Mode (Optional)
+2. **Configure R2 Credentials**:
+   - Go to **Stores > Configuration > MageZero > Cloudflare R2 Storage**
+   - Fill in:
+     - Account ID (optional if you provide endpoint)
+     - Endpoint (e.g. `https://<account-id>.r2.cloudflarestorage.com`)
+     - Region (use `auto` for R2)
+     - Bucket
+     - Access Key ID / Secret Access Key
+     - Optional key prefix (e.g. `media`)
 
-For Docker/containerized deployments where `pub/media` is mounted read-only:
-
-1. **Configure Base Media URL** (required):
+3. **Configure CDN/Public URL** (required):
    - Set **Base Media URL (Secure)** to your R2 public domain or Cloudflare CDN URL
    - Example: `https://media.example.com` or `https://pub-xxxxx.r2.dev`
+   - Optionally set **Base Media URL (Unsecure)** if needed
 
-2. **Enable Read-Only Mode**:
-   - Go to **Stores > Configuration > MageZero > Cloudflare R2 Storage**
-   - Set **Read-Only Filesystem Mode** to **Yes**
-   - Optionally adjust **File Existence Cache TTL** (default: 3600 seconds)
+4. **Configure Caching** (optional):
+   - Adjust **File Existence Cache TTL** (default: 3600 seconds)
+   - This caches CDN HEAD requests in Redis for optimal performance
 
-3. **Configure Cloudflare R2**:
+5. **Configure Cloudflare R2**:
    - Set your R2 bucket to **Public** or configure a [custom domain](https://developers.cloudflare.com/r2/buckets/public-buckets/)
-   - Enable Cloudflare CDN caching for optimal performance
+   - Enable Cloudflare CDN caching for best performance
 
 **How it works:**
-- Images are served directly from R2/CDN (no local downloads)
+- Images are served directly from R2/CDN (no local filesystem writes)
 - File existence checks use CDN HEAD requests (cached in Redis)
 - Image processing (swatches, resizes) happens in `/tmp` and uploads directly to R2
-- Truly stateless - `pub/media` never written to (except `/tmp`)
+- Truly stateless - `pub/media` is never written to (except `/tmp`)
 
 **Requirements:**
 - Base Media URL must be configured
 - Redis or similar cache backend recommended for file existence caching
 - `/tmp` directory must be writable (standard in containers)
+- R2 bucket must be public or have custom domain configured
 
-**Product Image Resizing:**
+### Product Image Resizing
 
-Read-only mode supports three approaches for product image resizing:
+This module supports three approaches for product image resizing:
 
-1. **Pre-generation (Recommended)**: Run `bin/magento catalog:images:resize` before deployment to generate all image sizes in R2. Images are processed in `/tmp` and uploaded directly.
+1. **Pre-generation (Recommended)**: Run `bin/magento catalog:images:resize` before deployment to generate all image sizes. Images are processed in `/tmp` and uploaded directly to R2.
 
-2. **Automatic On-Demand Generation**: When image URLs are generated in templates, missing sizes are automatically created in the background:
+2. **Automatic On-Demand Generation**: When image URLs are generated in templates, missing sizes are automatically created:
    - Template requests image URL (e.g., product listing, product page)
    - Module checks if image exists in CDN (with Redis caching)
    - If missing, downloads original from R2 → `/tmp`
@@ -98,14 +99,16 @@ Read-only mode supports three approaches for product image resizing:
 
    This happens transparently - no code changes needed in templates.
 
-3. **Manual On-Demand Endpoint**: Fallback controller endpoint for edge cases where automatic generation doesn't trigger.
+3. **Manual On-Demand Endpoint**: Fallback controller endpoint (`/magezero_r2/media/resize`) for edge cases where automatic generation doesn't trigger.
 
-**Best Practice**: Pre-generate during deployment, automatic on-demand handles any edge cases seamlessly.
+**Best Practice**: Pre-generate during deployment, rely on automatic on-demand as a seamless fallback for any edge cases.
 
 ## Notes
+- This module is designed for stateless/containerized deployments. The local filesystem (`pub/media`) is never written to except `/tmp`.
+- All media files are served directly from R2/CDN - no local sync or downloads.
 - The module uses path-style endpoints by default, which is recommended for R2.
-- Resized images generated via `bin/magento catalog:images:resize` are synced to R2 when Cloudflare R2 is the active media storage.
-- The **Flush Catalog Images Cache** action also clears cached resized images in R2.
+- Images generated via `bin/magento catalog:images:resize` are processed in `/tmp` and uploaded directly to R2.
+- The **Flush Catalog Images Cache** action clears cached resized images in R2.
 
 ## License
 OSL-3.0

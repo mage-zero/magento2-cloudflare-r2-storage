@@ -32,30 +32,14 @@ class ImageCacheSynchronizer
 
     public function sync(): void
     {
-        // In read-only mode, images are processed in /tmp and uploaded directly to R2
-        // No local cache directory to sync from
-        if (!$this->config->isR2Selected() || $this->config->isReadOnlyMode()) {
+        // No-op: images are processed in /tmp and uploaded directly to R2
+        // There is no local cache directory to sync from
+        if (!$this->config->isR2Selected()) {
             return;
         }
 
-        $cachePath = $this->mediaConfig->getBaseMediaPath() . '/cache';
-        if (!$this->mediaDirectory->isExist($cachePath)) {
-            return;
-        }
-
-        $entries = $this->mediaDirectory->readRecursively($cachePath);
-        foreach ($entries as $entry) {
-            if (!$this->mediaDirectory->isFile($entry)) {
-                continue;
-            }
-
-            try {
-                $this->storageDatabase->saveFile($entry);
-            } catch (\Throwable $exception) {
-                $this->logger->warning(
-                    sprintf('Unable to sync resized image "%s" to R2: %s', $entry, $exception->getMessage())
-                );
-            }
-        }
+        // When R2 is selected, images are always uploaded directly
+        // This sync is not needed
+        return;
     }
 }

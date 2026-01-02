@@ -12,7 +12,7 @@ use MageZero\CloudflareR2\Model\ImageProcessor\TemporaryProcessor;
 use Psr\Log\LoggerInterface;
 
 /**
- * On-demand image resize handler for read-only mode
+ * On-demand image resize handler
  *
  * Handles requests for missing image sizes by:
  * 1. Checking if the requested size exists in R2
@@ -54,7 +54,7 @@ class Resize implements HttpGetActionInterface
 
     public function execute()
     {
-        if (!$this->config->isReadOnlyMode()) {
+        if (!$this->config->isR2Selected()) {
             return $this->response->setStatusCode(404);
         }
 

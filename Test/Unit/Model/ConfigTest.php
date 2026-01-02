@@ -59,42 +59,6 @@ class ConfigTest extends TestCase
         $this->assertSame('auto', $config->getRegion());
     }
 
-    public function testIsReadOnlyModeReturnsTrueWhenEnabled(): void
-    {
-        $values = [
-            Config::XML_PATH_STORAGE_MEDIA => 2,
-            Config::XML_PATH_READ_ONLY_MODE => '1',
-        ];
-
-        $scopeConfig = $this->createMock(ScopeConfigInterface::class);
-        $scopeConfig->method('getValue')->willReturnCallback(
-            static function (string $path) use ($values) {
-                return $values[$path] ?? null;
-            }
-        );
-
-        $config = new Config($scopeConfig);
-        $this->assertTrue($config->isReadOnlyMode());
-    }
-
-    public function testIsReadOnlyModeReturnsFalseWhenR2NotSelected(): void
-    {
-        $values = [
-            Config::XML_PATH_STORAGE_MEDIA => 0,
-            Config::XML_PATH_READ_ONLY_MODE => '1',
-        ];
-
-        $scopeConfig = $this->createMock(ScopeConfigInterface::class);
-        $scopeConfig->method('getValue')->willReturnCallback(
-            static function (string $path) use ($values) {
-                return $values[$path] ?? null;
-            }
-        );
-
-        $config = new Config($scopeConfig);
-        $this->assertFalse($config->isReadOnlyMode());
-    }
-
     public function testGetCacheTtlReturnsConfiguredValue(): void
     {
         $values = [

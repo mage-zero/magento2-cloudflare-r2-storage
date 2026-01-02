@@ -45,31 +45,8 @@ class SynchronizationPlugin
             return [$relativeFileName];
         }
 
-        // Read-only mode: check CDN instead of downloading
-        if ($this->config->isReadOnlyMode()) {
-            $this->checkFileExistsInCdn($relativeFileName);
-            return [$relativeFileName];
-        }
-
-        // Traditional mode: download from R2 to local filesystem
-        $storage = $this->storageFactory->create();
-        try {
-            $storage->loadByFilename($relativeFileName);
-        } catch (\Exception $exception) {
-            return [$relativeFileName];
-        }
-
-        if ($storage->getId()) {
-            $file = $this->mediaDirectory->openFile($relativeFileName, 'w');
-            try {
-                $file->lock();
-                $file->write($storage->getContent());
-                $file->unlock();
-                $file->close();
-            } catch (FileSystemException $exception) {
-                $file->close();
-            }
-        }
+        // Check CDN for file existence (never write to local filesystem)
+        $this->checkFileExistsInCdn($relativeFileName);
 
         return [$relativeFileName];
     }

@@ -63,27 +63,8 @@ class MediaPlugin
             return $proceed($imageUrl);
         }
 
-        // Read-only mode: process swatches in /tmp
-        if ($this->config->isReadOnlyMode()) {
-            return $this->generateSwatchVariationsInTemp($subject, $proceed, $imageUrl);
-        }
-
-        // Traditional mode: download to local filesystem
-        $fileToRestore = $subject->getAttributeSwatchPath($imageUrl);
-        $this->fileStorageDb->saveFileToFilesystem($fileToRestore);
-
-        $result = $proceed($imageUrl);
-
-        foreach ($this->swatchImageTypes as $swatchType) {
-            $imageConfig = $subject->getImageConfig();
-            $fileName = $this->prepareFileName($imageUrl);
-            $swatchPath = $subject->getSwatchCachePath($swatchType)
-                . $subject->getFolderNameSize($swatchType, $imageConfig)
-                . $fileName['path'] . '/' . $fileName['name'];
-            $this->fileStorageDb->saveFile($swatchPath);
-        }
-
-        return $result;
+        // Process swatches in /tmp and upload directly to R2
+        return $this->generateSwatchVariationsInTemp($subject, $proceed, $imageUrl);
     }
 
     private function generateSwatchVariationsInTemp(Media $subject, callable $proceed, string $imageUrl): bool

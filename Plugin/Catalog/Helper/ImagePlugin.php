@@ -44,7 +44,7 @@ class ImagePlugin
      */
     public function afterGetUrl(Image $subject, string $result): string
     {
-        if (!$this->config->isReadOnlyMode()) {
+        if (!$this->config->isR2Selected()) {
             return $result;
         }
 

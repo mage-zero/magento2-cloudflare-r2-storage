@@ -10,7 +10,7 @@ use MageZero\CloudflareR2\Model\ImageProcessor\TemporaryProcessor;
 use Psr\Log\LoggerInterface;
 
 /**
- * Plugin to handle image cache generation in read-only mode
+ * Plugin to handle image cache generation in /tmp
  */
 class CachePlugin
 {
@@ -35,23 +35,23 @@ class CachePlugin
     }
 
     /**
-     * Intercept resize method to handle /tmp processing in read-only mode
+     * Intercept resize method to handle /tmp processing
      */
     public function aroundResize(Cache $subject, callable $proceed, $originalImageName, $imageParams = [])
     {
-        if (!$this->config->isReadOnlyMode()) {
+        if (!$this->config->isR2Selected()) {
             return $proceed($originalImageName, $imageParams);
         }
 
         try {
-            // In read-only mode, process image in /tmp and upload to R2
+            // Process image in /tmp and upload to R2
             return $this->resizeInTemp($originalImageName, $imageParams, $proceed);
         } catch (\Exception $e) {
             $this->logger->error(
-                'Failed to resize image in read-only mode',
+                'Failed to resize image in /tmp',
                 ['image' => $originalImageName, 'params' => $imageParams, 'error' => $e->getMessage()]
             );
-            // Fallback to standard processing (will fail in read-only, but logged)
+            // Fallback to standard processing (will fail in read-only filesystem, but logged)
             return $proceed($originalImageName, $imageParams);
         }
     }
