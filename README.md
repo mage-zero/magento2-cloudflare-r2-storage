@@ -13,12 +13,13 @@ Magento 2 module that adds Cloudflare R2 as a media storage backend using the S3
 
 | Magento | PHP | PHPStan | Unit Tests | Integration Tests |
 |---------|-----|---------|------------|-------------------|
-| 2.4.6-p9 | 8.1 | ✓ | ✓ | ✓ |
-| 2.4.7-p4 | 8.2 | ✓ | ✓ | ✓ |
+| 2.4.6-p9 | 8.1 | - | ✓ | ✓ |
+| 2.4.7-p4 | 8.2 | - | ✓ | ✓ |
 | 2.4.8-p3 | 8.3 | ✓ | ✓ | ✓ |
 | 2.4.8-p3 | 8.4 | ✓ | ✓ | - |
 
-PHPStan and unit tests run on all PHP versions to ensure syntax compatibility.
+Unit tests run on all PHP versions to ensure syntax compatibility.
+PHPStan runs on PHP 8.3 and 8.4 for static analysis.
 Integration tests run once per Magento version to verify R2 functionality.
 
 ## Features
