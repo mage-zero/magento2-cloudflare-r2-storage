@@ -18,7 +18,7 @@ use PHPUnit\Framework\TestCase;
 class R2StorageOperationsTest extends TestCase
 {
     private static ?S3Client $client = null;
-    private static string $bucket = '';
+    private static ?string $bucket = null;
     private static string $testPrefix = '';
 
     public static function setUpBeforeClass(): void
@@ -26,13 +26,15 @@ class R2StorageOperationsTest extends TestCase
         $accountId = getenv('R2_ACCOUNT_ID');
         $accessKey = getenv('R2_ACCESS_KEY');
         $secretKey = getenv('R2_SECRET_KEY');
-        self::$bucket = (string) getenv('R2_BUCKET');
+        $bucket = getenv('R2_BUCKET');
 
-        if (!$accountId || !$accessKey || !$secretKey || !self::$bucket) {
+        if (!$accountId || !$accessKey || !$secretKey || !$bucket) {
             self::markTestSkipped(
                 'R2 credentials not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET.'
             );
         }
+
+        self::$bucket = $bucket;
 
         self::$client = new S3Client([
             'region' => 'auto',
@@ -51,7 +53,7 @@ class R2StorageOperationsTest extends TestCase
 
     public static function tearDownAfterClass(): void
     {
-        if (self::$client === null || self::$bucket === '') {
+        if (self::$client === null || self::$bucket === null) {
             return;
         }
 
