@@ -6,6 +6,8 @@ jobs:
   unit-tests:
     name: Magento 2 Unit Tests
     runs-on: ubuntu-latest
+    env:
+      REPOSITORY_URL: https://repo-magento-mirror.fooman.co.nz/
     strategy:
       fail-fast: false
       matrix:
