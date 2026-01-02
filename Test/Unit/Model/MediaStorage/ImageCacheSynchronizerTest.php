@@ -6,7 +6,7 @@ use MageZero\CloudflareR2\Model\MediaStorage\ImageCacheSynchronizer;
 use Magento\Catalog\Model\Product\Media\ConfigInterface as MediaConfig;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Framework\Filesystem;
-use Magento\Framework\Filesystem\Directory\WriteInterface;
+use Magento\Framework\Filesystem\Directory\Write;
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageDatabase;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
@@ -19,7 +19,7 @@ class ImageCacheSynchronizerTest extends TestCase
         $config->method('isR2Selected')->willReturn(false);
 
         $mediaConfig = $this->createMock(MediaConfig::class);
-        $mediaDirectory = $this->createMock(WriteInterface::class);
+        $mediaDirectory = $this->createMock(Write::class);
         $filesystem = $this->createMock(Filesystem::class);
         $filesystem->method('getDirectoryWrite')->with(DirectoryList::MEDIA)->willReturn($mediaDirectory);
 
@@ -47,7 +47,7 @@ class ImageCacheSynchronizerTest extends TestCase
         $mediaConfig = $this->createMock(MediaConfig::class);
         $mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
 
-        $mediaDirectory = $this->createMock(WriteInterface::class);
+        $mediaDirectory = $this->createMock(Write::class);
         $mediaDirectory->method('isExist')->with('catalog/product/cache')->willReturn(true);
         $mediaDirectory->method('readRecursively')
             ->with('catalog/product/cache')
