@@ -32,7 +32,9 @@ class ImageCacheSynchronizer
 
     public function sync(): void
     {
-        if (!$this->config->isR2Selected()) {
+        // In read-only mode, images are processed in /tmp and uploaded directly to R2
+        // No local cache directory to sync from
+        if (!$this->config->isR2Selected() || $this->config->isReadOnlyMode()) {
             return;
         }
 

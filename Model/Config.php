@@ -14,6 +14,12 @@ class Config
     public const XML_PATH_SECRET_KEY = 'magezero_r2/general/secret_key';
     public const XML_PATH_KEY_PREFIX = 'magezero_r2/general/key_prefix';
     public const XML_PATH_PATH_STYLE = 'magezero_r2/general/path_style';
+    public const XML_PATH_READ_ONLY_MODE = 'magezero_r2/general/read_only_mode';
+    public const XML_PATH_CACHE_TTL = 'magezero_r2/general/cache_ttl';
+    public const XML_PATH_BASE_MEDIA_URL_UNSECURE = 'web/unsecure/base_media_url';
+    public const XML_PATH_BASE_MEDIA_URL_SECURE = 'web/secure/base_media_url';
+
+    public const DEFAULT_CACHE_TTL = 3600;
 
     private ScopeConfigInterface $scopeConfig;
 
@@ -77,5 +83,27 @@ class Config
     public function usePathStyle(): bool
     {
         return (bool)$this->scopeConfig->getValue(self::XML_PATH_PATH_STYLE);
+    }
+
+    public function isReadOnlyMode(): bool
+    {
+        return $this->isR2Selected() &&
+            (bool)$this->scopeConfig->getValue(self::XML_PATH_READ_ONLY_MODE);
+    }
+
+    public function getCacheTtl(): int
+    {
+        $ttl = (int)$this->scopeConfig->getValue(self::XML_PATH_CACHE_TTL);
+        return $ttl > 0 ? $ttl : self::DEFAULT_CACHE_TTL;
+    }
+
+    public function getBaseMediaUrl(): string
+    {
+        // Try secure URL first, fallback to unsecure
+        $url = trim((string)$this->scopeConfig->getValue(self::XML_PATH_BASE_MEDIA_URL_SECURE));
+        if ($url === '') {
+            $url = trim((string)$this->scopeConfig->getValue(self::XML_PATH_BASE_MEDIA_URL_UNSECURE));
+        }
+        return rtrim($url, '/');
     }
 }
