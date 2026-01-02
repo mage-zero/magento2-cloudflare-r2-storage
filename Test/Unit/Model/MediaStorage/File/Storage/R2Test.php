@@ -37,16 +37,14 @@ class R2Test extends TestCase
 
         $this->s3Client = $this->getMockBuilder(S3Client::class)
             ->disableOriginalConstructor()
-            ->addMethods(['headObject', 'putObject', 'getObject', 'deleteObject', 'copyObject'])
+            ->addMethods(['headObject', 'putObject', 'getObject', 'deleteObject', 'copyObject', 'listObjectsV2', 'deleteObjects'])
             ->getMock();
         $clientFactory = $this->createMock(R2ClientFactory::class);
         $clientFactory->method('create')->willReturn($this->s3Client);
 
         $driver = $this->getMockBuilder(DriverInterface::class)
-            ->addMethods(['getBaseName'])
             ->getMockForAbstractClass();
         $driver->method('getParentDirectory')->willReturnCallback(fn($path) => dirname($path));
-        $driver->method('getBaseName')->willReturnCallback(fn($path) => basename($path));
 
         $this->r2 = new R2($this->config, $mediaHelper, $storageHelper, $logger, $clientFactory, $driver);
     }
@@ -172,5 +170,203 @@ class R2Test extends TestCase
     public function testInitReturnsSelf(): void
     {
         $this->assertSame($this->r2, $this->r2->init());
+    }
+
+    public function testGetMediaBaseDirectory(): void
+    {
+        $this->assertEquals('/var/www/pub/media', $this->r2->getMediaBaseDirectory());
+    }
+
+    public function testImportDirectoriesReturnsSelf(): void
+    {
+        $this->assertSame($this->r2, $this->r2->importDirectories(['dir1', 'dir2']));
+    }
+
+    public function testImportFilesUploadsFiles(): void
+    {
+        $this->s3Client->expects($this->exactly(2))
+            ->method('putObject');
+
+        $result = $this->r2->importFiles([
+            ['filename' => 'file1.jpg', 'directory' => 'catalog', 'content' => 'content1'],
+            ['filename' => 'file2.jpg', 'directory' => 'catalog', 'content' => 'content2'],
+        ]);
+
+        $this->assertSame($this->r2, $result);
+    }
+
+    public function testImportFilesLogsErrorOnException(): void
+    {
+        $command = $this->createMock(CommandInterface::class);
+        $this->s3Client->method('putObject')
+            ->willThrowException(new AwsException('Upload failed', $command));
+
+        $result = $this->r2->importFiles([
+            ['filename' => 'file1.jpg', 'directory' => 'catalog', 'content' => 'content1'],
+        ]);
+
+        $this->assertSame($this->r2, $result);
+        $this->assertTrue($this->r2->hasErrors());
+    }
+
+    public function testDeleteDirectoryDeletesAllFilesWithPrefix(): void
+    {
+        $this->s3Client->method('listObjectsV2')->willReturn([
+            'Contents' => [
+                ['Key' => 'catalog/product/cache/file1.jpg'],
+                ['Key' => 'catalog/product/cache/file2.jpg'],
+            ],
+            'IsTruncated' => false,
+        ]);
+
+        $this->s3Client->expects($this->once())
+            ->method('deleteObjects')
+            ->with($this->callback(function ($params) {
+                return $params['Bucket'] === 'test-bucket'
+                    && count($params['Delete']['Objects']) === 2;
+            }));
+
+        $result = $this->r2->deleteDirectory('catalog/product/cache');
+
+        $this->assertSame($this->r2, $result);
+    }
+
+    public function testDeleteDirectoryDoesNothingForEmptyPrefix(): void
+    {
+        $this->s3Client->expects($this->never())->method('listObjectsV2');
+        $this->s3Client->expects($this->never())->method('deleteObjects');
+
+        $result = $this->r2->deleteDirectory('');
+
+        $this->assertSame($this->r2, $result);
+    }
+
+    public function testGetSubdirectoriesReturnsDirectories(): void
+    {
+        $this->s3Client->method('listObjectsV2')->willReturn([
+            'CommonPrefixes' => [
+                ['Prefix' => 'catalog/product/'],
+                ['Prefix' => 'catalog/category/'],
+            ],
+        ]);
+
+        $dirs = $this->r2->getSubdirectories('catalog');
+
+        $this->assertCount(2, $dirs);
+        $this->assertEquals('catalog/product', $dirs[0]['name']);
+        $this->assertEquals('catalog/category', $dirs[1]['name']);
+    }
+
+    public function testGetDirectoryFilesReturnsFiles(): void
+    {
+        $this->s3Client->method('listObjectsV2')->willReturn([
+            'Contents' => [
+                ['Key' => 'catalog/file1.jpg'],
+                ['Key' => 'catalog/file2.jpg'],
+            ],
+        ]);
+
+        $this->s3Client->method('getObject')->willReturn([
+            'Body' => 'file-content',
+        ]);
+
+        $files = $this->r2->getDirectoryFiles('catalog');
+
+        $this->assertCount(2, $files);
+        $this->assertEquals('file1.jpg', $files[0]['filename']);
+        $this->assertEquals('catalog', $files[0]['directory']);
+    }
+
+    public function testCopyFileReturnsFalseOnException(): void
+    {
+        $command = $this->createMock(CommandInterface::class);
+        $this->s3Client->method('copyObject')
+            ->willThrowException(new AwsException('Copy failed', $command));
+
+        $this->assertFalse($this->r2->copyFile('old.jpg', 'new.jpg'));
+    }
+
+    public function testRenameFileReturnsFalseWhenCopyFails(): void
+    {
+        $command = $this->createMock(CommandInterface::class);
+        $this->s3Client->method('copyObject')
+            ->willThrowException(new AwsException('Copy failed', $command));
+
+        $this->assertFalse($this->r2->renameFile('old.jpg', 'new.jpg'));
+    }
+
+    public function testDeleteFileReturnsFalseOnException(): void
+    {
+        $command = $this->createMock(CommandInterface::class);
+        $this->s3Client->method('deleteObject')
+            ->willThrowException(new AwsException('Delete failed', $command));
+
+        $this->assertFalse($this->r2->deleteFile('test.jpg'));
+    }
+
+    public function testSaveFileThrowsExceptionOnUploadError(): void
+    {
+        $command = $this->createMock(CommandInterface::class);
+        $this->s3Client->method('putObject')
+            ->willThrowException(new AwsException('Upload failed', $command));
+
+        $this->expectException(\Magento\Framework\Exception\LocalizedException::class);
+        $this->expectExceptionMessage('Unable to save file');
+
+        $this->r2->saveFile([
+            'filename' => 'test.jpg',
+            'directory' => 'catalog',
+            'content' => 'content',
+        ]);
+    }
+
+    public function testSaveFileThrowsExceptionOnInvalidFormat(): void
+    {
+        $this->expectException(\Magento\Framework\Exception\LocalizedException::class);
+        $this->expectExceptionMessage('Wrong file info format');
+
+        $this->r2->saveFile([]);
+    }
+
+    public function testExportDirectoriesReturnsFalseWhenEmpty(): void
+    {
+        $this->s3Client->method('listObjectsV2')->willReturn([
+            'Contents' => [],
+            'IsTruncated' => false,
+        ]);
+
+        $result = $this->r2->exportDirectories(0, 100);
+
+        $this->assertFalse($result);
+    }
+
+    public function testExportFilesReturnsFalseWhenEmpty(): void
+    {
+        $this->s3Client->method('listObjectsV2')->willReturn([
+            'Contents' => [],
+            'IsTruncated' => false,
+        ]);
+
+        $result = $this->r2->exportFiles(0, 100);
+
+        $this->assertFalse($result);
+    }
+
+    public function testClearDeletesAllKeys(): void
+    {
+        $this->s3Client->method('listObjectsV2')->willReturn([
+            'Contents' => [
+                ['Key' => 'file1.jpg'],
+                ['Key' => 'file2.jpg'],
+            ],
+            'IsTruncated' => false,
+        ]);
+
+        $this->s3Client->expects($this->once())
+            ->method('deleteObjects');
+
+        $result = $this->r2->clear();
+
+        $this->assertSame($this->r2, $result);
     }
 }

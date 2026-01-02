@@ -132,7 +132,7 @@ class R2 extends DataObject
                 if (isset($object['Body'])) {
                     $directory = $this->driver->getParentDirectory($filePath);
                     $result[] = [
-                        'filename' => $this->driver->getBaseName($filePath),
+                        'filename' => basename($filePath),
                         'directory' => $directory === '.' ? null : $directory,
                         'content' => (string)$object['Body'],
                     ];
@@ -319,7 +319,7 @@ class R2 extends DataObject
                         $relative = $this->keyFormatter->fromKey($object['Key']);
                         $directory = $this->driver->getParentDirectory($relative);
                         $files[] = [
-                            'filename' => $this->driver->getBaseName($relative),
+                            'filename' => basename($relative),
                             'directory' => $directory === '.' ? null : $directory,
                             'content' => (string)$content['Body'],
                         ];
