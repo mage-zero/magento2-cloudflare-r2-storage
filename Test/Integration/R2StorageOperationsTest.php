@@ -3,7 +3,6 @@ namespace MageZero\CloudflareR2\Test\Integration;
 
 use Aws\S3\S3Client;
 use Aws\Exception\AwsException;
-use Magento\TestFramework\Helper\Bootstrap;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -13,7 +12,8 @@ use PHPUnit\Framework\TestCase;
  * from environment variables. They verify the AWS SDK integration works
  * correctly with R2's S3-compatible API.
  *
- * @magentoAppArea adminhtml
+ * This test can run standalone without Magento - it only tests the AWS SDK
+ * against Cloudflare R2's S3-compatible API.
  */
 class R2StorageOperationsTest extends TestCase
 {
