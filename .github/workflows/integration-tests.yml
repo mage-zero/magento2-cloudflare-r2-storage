@@ -19,8 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Integration tests (Magento ${{ matrix.magento }}, PHP ${{ matrix.php }})
-        uses: extdn/github-actions-m2/magento-integration-tests/${{ matrix.php }}@master
+      - name: Integration tests (Magento ${{ matrix.magento }}, PHP 8.2)
+        if: ${{ matrix.php == '8.2' }}
+        uses: extdn/github-actions-m2/magento-integration-tests/8.2@master
         with:
           module_name: MageZero_CloudflareR2
           composer_name: magezero/magento2-cloudflare-r2-storage
