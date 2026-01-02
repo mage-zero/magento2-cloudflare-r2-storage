@@ -132,6 +132,7 @@ class R2 extends DataObject
                 if (isset($object['Body'])) {
                     $directory = $this->driver->getParentDirectory($filePath);
                     $result[] = [
+                        // phpcs:ignore Magento2.Functions.DiscouragedFunction -- safe: input is R2 API key, not user data
                         'filename' => basename($filePath),
                         'directory' => $directory === '.' ? null : $directory,
                         'content' => (string)$object['Body'],
@@ -319,6 +320,7 @@ class R2 extends DataObject
                         $relative = $this->keyFormatter->fromKey($object['Key']);
                         $directory = $this->driver->getParentDirectory($relative);
                         $files[] = [
+                            // phpcs:ignore Magento2.Functions.DiscouragedFunction -- safe: input is R2 API key, not user data
                             'filename' => basename($relative),
                             'directory' => $directory === '.' ? null : $directory,
                             'content' => (string)$content['Body'],
