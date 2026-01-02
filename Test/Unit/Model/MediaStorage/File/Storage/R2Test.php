@@ -35,7 +35,10 @@ class R2Test extends TestCase
 
         $logger = $this->createMock(LoggerInterface::class);
 
-        $this->s3Client = $this->createMock(S3Client::class);
+        $this->s3Client = $this->getMockBuilder(S3Client::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['headObject', 'putObject', 'getObject', 'deleteObject', 'copyObject'])
+            ->getMock();
         $clientFactory = $this->createMock(R2ClientFactory::class);
         $clientFactory->method('create')->willReturn($this->s3Client);
 
