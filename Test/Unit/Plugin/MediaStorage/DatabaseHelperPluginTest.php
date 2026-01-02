@@ -259,6 +259,7 @@ class DatabaseHelperPluginTest extends TestCase
         $proceedCalled = false;
         $proceed = function ($filename) use (&$proceedCalled) {
             $proceedCalled = true;
+            $this->assertEquals('/var/www/pub/media/test.jpg', $filename);
             return 'proceed-result';
         };
 
