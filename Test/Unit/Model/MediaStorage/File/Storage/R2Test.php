@@ -39,7 +39,9 @@ class R2Test extends TestCase
         $clientFactory = $this->createMock(R2ClientFactory::class);
         $clientFactory->method('create')->willReturn($this->s3Client);
 
-        $driver = $this->createMock(DriverInterface::class);
+        $driver = $this->getMockBuilder(DriverInterface::class)
+            ->addMethods(['getBaseName'])
+            ->getMockForAbstractClass();
         $driver->method('getParentDirectory')->willReturnCallback(fn($path) => dirname($path));
         $driver->method('getBaseName')->willReturnCallback(fn($path) => basename($path));
 

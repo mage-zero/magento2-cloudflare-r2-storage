@@ -201,7 +201,11 @@ class DatabaseHelperPluginTest extends TestCase
 
     public function testAroundSaveFileToFilesystemUsesR2WhenSelected(): void
     {
-        $r2Model = $this->createMock(R2::class);
+        $r2Model = $this->getMockBuilder(R2::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['getId'])
+            ->onlyMethods(['loadByFilename', 'getData'])
+            ->getMock();
         $r2Model->method('loadByFilename')->willReturnSelf();
         $r2Model->method('getId')->willReturn('test-id');
         $r2Model->method('getData')->willReturn([
@@ -231,7 +235,11 @@ class DatabaseHelperPluginTest extends TestCase
 
     public function testAroundSaveFileToFilesystemReturnsFalseWhenFileNotFound(): void
     {
-        $r2Model = $this->createMock(R2::class);
+        $r2Model = $this->getMockBuilder(R2::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['getId'])
+            ->onlyMethods(['loadByFilename'])
+            ->getMock();
         $r2Model->method('loadByFilename')->willReturnSelf();
         $r2Model->method('getId')->willReturn(null);
 
