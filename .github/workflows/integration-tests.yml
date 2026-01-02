@@ -5,8 +5,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  integration-tests:
-    name: Integration Tests
+  # Magento 2.4.6 and 2.4.7 require Elasticsearch 7
+  integration-tests-es7:
+    name: Integration Tests (ES7)
     runs-on: ubuntu-latest
     env:
       COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
@@ -18,10 +19,6 @@ jobs:
             magento: '2.4.6-p9'
           - php: '8.2'
             magento: '2.4.7-p4'
-          - php: '8.3'
-            magento: '2.4.8-p3'
-          - php: '8.4'
-            magento: '2.4.8-p3'
     services:
       mysql:
         image: mysql:5.7
@@ -67,6 +64,40 @@ jobs:
           module_name: MageZero_CloudflareR2
           composer_name: magezero/magento2-cloudflare-r2-storage
           magento_version: ${{ matrix.magento }}
+
+  # Magento 2.4.8 requires Elasticsearch 8
+  integration-tests-es8:
+    name: Integration Tests (ES8)
+    runs-on: ubuntu-latest
+    env:
+      COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.3'
+            magento: '2.4.8-p3'
+          - php: '8.4'
+            magento: '2.4.8-p3'
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: --tmpfs /tmp:rw --tmpfs /var/lib/mysql:rw --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+      es:
+        image: docker.io/wardenenv/elasticsearch:8.4
+        ports:
+          - 9200:9200
+        env:
+          'discovery.type': single-node
+          'xpack.security.enabled': false
+          ES_JAVA_OPTS: "-Xms64m -Xmx512m"
+        options: --health-cmd="curl localhost:9200/_cluster/health?wait_for_status=yellow&timeout=60s" --health-interval=10s --health-timeout=5s --health-retries=3
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Integration tests (Magento ${{ matrix.magento }}, PHP 8.3)
         if: ${{ matrix.php == '8.3' }}
