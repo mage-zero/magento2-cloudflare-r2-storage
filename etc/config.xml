@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Config/etc/config.xsd">
+    <default>
+        <magezero_r2>
+            <general>
+                <region>auto</region>
+                <path_style>1</path_style>
+                <key_prefix></key_prefix>
+            </general>
+        </magezero_r2>
+    </default>
+</config>
