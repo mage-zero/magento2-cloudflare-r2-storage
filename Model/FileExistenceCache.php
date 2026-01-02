@@ -67,6 +67,6 @@ class FileExistenceCache
 
     private function getCacheKey(string $filename): string
     {
-        return self::CACHE_PREFIX . md5($filename);
+        return self::CACHE_PREFIX . hash('sha256', $filename);
     }
 }
