@@ -1,0 +1,30 @@
+name: Integration Tests
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  r2-integration:
+    name: R2 Integration Tests
+    runs-on: ubuntu-latest
+    env:
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY: ${{ secrets.R2_ACCESS_KEY }}
+      R2_SECRET_KEY: ${{ secrets.R2_SECRET_KEY }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: json, curl
+          coverage: none
+
+      - name: Install dependencies
+        run: composer require --dev aws/aws-sdk-php phpunit/phpunit:^10.0 --no-interaction
+
+      - name: Run R2 integration tests
+        run: vendor/bin/phpunit --testsuite integration --colors=always
