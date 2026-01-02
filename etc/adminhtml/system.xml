@@ -53,6 +53,11 @@
                     <label>Use Path Style Endpoints</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
+                <field id="cache_ttl" translate="label" type="text" sortOrder="90" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>File Existence Cache TTL (seconds)</label>
+                    <comment>How long to cache CDN file existence checks in Redis. Default: 3600 (1 hour)</comment>
+                    <validate>validate-number validate-zero-or-greater</validate>
+                </field>
             </group>
         </section>
     </system>

@@ -11,7 +11,6 @@ class MediaPlugin
     private Config $config;
     private MediaConfig $mediaConfig;
     private Database $fileStorageDb;
-    private array $swatchImageTypes = ['swatch_image', 'swatch_thumb'];
 
     public function __construct(
         Config $config,
@@ -23,6 +22,9 @@ class MediaPlugin
         $this->fileStorageDb = $fileStorageDb;
     }
 
+    /**
+     * Handle moving swatch images from tmp to permanent storage in R2
+     */
     public function beforeMoveImageFromTmp(Media $subject, $file)
     {
         if ($this->fileStorageDb->checkDbUsage() && $this->config->isR2Selected()) {
@@ -43,38 +45,6 @@ class MediaPlugin
         }
 
         return [$file];
-    }
-
-    public function aroundGenerateSwatchVariations(Media $subject, callable $proceed, $imageUrl)
-    {
-        if ($this->fileStorageDb->checkDbUsage() && $this->config->isR2Selected()) {
-            $fileToRestore = $subject->getAttributeSwatchPath($imageUrl);
-            $this->fileStorageDb->saveFileToFilesystem($fileToRestore);
-
-            $result = $proceed($imageUrl);
-
-            foreach ($this->swatchImageTypes as $swatchType) {
-                $imageConfig = $subject->getImageConfig();
-                $fileName = $this->prepareFileName($imageUrl);
-                $swatchPath = $subject->getSwatchCachePath($swatchType)
-                    . $subject->getFolderNameSize($swatchType, $imageConfig)
-                    . $fileName['path'] . '/' . $fileName['name'];
-                $this->fileStorageDb->saveFile($swatchPath);
-            }
-
-            return $result;
-        }
-
-        return $proceed($imageUrl);
-    }
-
-    private function prepareFileName($imageUrl): array
-    {
-        $fileArray = explode('/', $imageUrl);
-        $fileName = array_pop($fileArray);
-        $filePath = implode('/', $fileArray);
-
-        return ['name' => $fileName, 'path' => $filePath];
     }
 
     private function getUniqueFileName($file): string

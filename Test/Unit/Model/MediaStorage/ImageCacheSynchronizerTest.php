@@ -2,83 +2,155 @@
 namespace MageZero\CloudflareR2\Test\Unit\Model\MediaStorage;
 
 use MageZero\CloudflareR2\Model\Config;
+use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
 use MageZero\CloudflareR2\Model\MediaStorage\ImageCacheSynchronizer;
 use Magento\Catalog\Model\Product\Media\ConfigInterface as MediaConfig;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Framework\Filesystem;
-use Magento\Framework\Filesystem\Directory\Write;
-use Magento\MediaStorage\Helper\File\Storage\Database as StorageDatabase;
+use Magento\Framework\Filesystem\Directory\ReadInterface;
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 
 class ImageCacheSynchronizerTest extends TestCase
 {
-    public function testSyncSkipsWhenR2NotSelected(): void
+    private Config|MockObject $config;
+    private MediaConfig|MockObject $mediaConfig;
+    private ReadInterface|MockObject $mediaDirectory;
+    private R2|MockObject $r2Storage;
+    private LoggerInterface|MockObject $logger;
+    private ImageCacheSynchronizer $synchronizer;
+
+    protected function setUp(): void
     {
-        $config = $this->createMock(Config::class);
-        $config->method('isR2Selected')->willReturn(false);
+        $this->config = $this->createMock(Config::class);
+        $this->mediaConfig = $this->createMock(MediaConfig::class);
+        $this->mediaDirectory = $this->createMock(ReadInterface::class);
+        $this->r2Storage = $this->createMock(R2::class);
+        $this->logger = $this->createMock(LoggerInterface::class);
 
-        $mediaConfig = $this->createMock(MediaConfig::class);
-        $mediaDirectory = $this->createMock(Write::class);
         $filesystem = $this->createMock(Filesystem::class);
-        $filesystem->method('getDirectoryWrite')->with(DirectoryList::MEDIA)->willReturn($mediaDirectory);
+        $filesystem->method('getDirectoryRead')
+            ->with(DirectoryList::MEDIA)
+            ->willReturn($this->mediaDirectory);
 
-        $storageDatabase = $this->createMock(StorageDatabase::class);
-        $storageDatabase->expects($this->never())->method('saveFile');
-
-        $logger = $this->createMock(LoggerInterface::class);
-
-        $synchronizer = new ImageCacheSynchronizer(
-            $config,
-            $mediaConfig,
+        $this->synchronizer = new ImageCacheSynchronizer(
+            $this->config,
+            $this->mediaConfig,
             $filesystem,
-            $storageDatabase,
-            $logger
+            $this->r2Storage,
+            $this->logger
         );
-
-        $synchronizer->sync();
     }
 
-    public function testSyncUploadsCacheFiles(): void
+    public function testSyncSkipsWhenR2NotSelected(): void
     {
-        $config = $this->createMock(Config::class);
-        $config->method('isR2Selected')->willReturn(true);
+        $this->config->method('isR2Selected')->willReturn(false);
+        $this->mediaDirectory->expects($this->never())->method('isDirectory');
+        $this->r2Storage->expects($this->never())->method('saveFile');
 
-        $mediaConfig = $this->createMock(MediaConfig::class);
-        $mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
+        $this->synchronizer->sync();
+    }
 
-        $mediaDirectory = $this->createMock(Write::class);
-        $mediaDirectory->method('isExist')->with('catalog/product/cache')->willReturn(true);
-        $mediaDirectory->method('readRecursively')
-            ->with('catalog/product/cache')
-            ->willReturn([
-                'catalog/product/cache/a.jpg',
-                'catalog/product/cache/dir',
-            ]);
-        $mediaDirectory->method('isFile')->willReturnCallback(
-            static function (string $path): bool {
-                return $path === 'catalog/product/cache/a.jpg';
-            }
-        );
+    public function testSyncSkipsWhenCacheDirectoryDoesNotExist(): void
+    {
+        $this->config->method('isR2Selected')->willReturn(true);
+        $this->mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
+        $this->mediaDirectory->method('isDirectory')
+            ->willReturn(false);
 
-        $filesystem = $this->createMock(Filesystem::class);
-        $filesystem->method('getDirectoryWrite')->with(DirectoryList::MEDIA)->willReturn($mediaDirectory);
+        $this->r2Storage->expects($this->never())->method('saveFile');
 
-        $storageDatabase = $this->createMock(StorageDatabase::class);
-        $storageDatabase->expects($this->once())
+        $this->synchronizer->sync();
+    }
+
+    public function testSyncUploadsFilesToR2(): void
+    {
+        $this->config->method('isR2Selected')->willReturn(true);
+        $this->mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
+
+        $this->mediaDirectory->method('isDirectory')
+            ->willReturnCallback(function ($path) {
+                return in_array($path, ['catalog/product/cache', 'catalog/product/cache/subdir']);
+            });
+
+        $this->mediaDirectory->method('isFile')
+            ->willReturnCallback(function ($path) {
+                return $path === 'catalog/product/cache/image.jpg';
+            });
+
+        $this->mediaDirectory->method('read')
+            ->willReturnCallback(function ($path) {
+                if ($path === 'catalog/product/cache') {
+                    return ['catalog/product/cache/image.jpg'];
+                }
+                return [];
+            });
+
+        $this->mediaDirectory->method('readFile')
+            ->with('catalog/product/cache/image.jpg')
+            ->willReturn('image content');
+
+        $this->r2Storage->expects($this->once())
             ->method('saveFile')
-            ->with('catalog/product/cache/a.jpg');
+            ->with([
+                'filename' => 'catalog/product/cache/image.jpg',
+                'content' => 'image content'
+            ]);
 
-        $logger = $this->createMock(LoggerInterface::class);
+        $this->synchronizer->sync();
+    }
 
-        $synchronizer = new ImageCacheSynchronizer(
-            $config,
-            $mediaConfig,
-            $filesystem,
-            $storageDatabase,
-            $logger
-        );
+    public function testSyncHandlesReadErrors(): void
+    {
+        $this->config->method('isR2Selected')->willReturn(true);
+        $this->mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
 
-        $synchronizer->sync();
+        $this->mediaDirectory->method('isDirectory')
+            ->willReturnCallback(function ($path) {
+                return $path === 'catalog/product/cache';
+            });
+
+        $this->mediaDirectory->method('read')
+            ->willThrowException(new \Exception('Read error'));
+
+        $this->logger->expects($this->once())
+            ->method('error')
+            ->with('Error syncing image cache directory', $this->anything());
+
+        $this->r2Storage->expects($this->never())->method('saveFile');
+
+        $this->synchronizer->sync();
+    }
+
+    public function testSyncHandlesUploadErrors(): void
+    {
+        $this->config->method('isR2Selected')->willReturn(true);
+        $this->mediaConfig->method('getBaseMediaPath')->willReturn('catalog/product');
+
+        $this->mediaDirectory->method('isDirectory')
+            ->willReturnCallback(function ($path) {
+                return $path === 'catalog/product/cache';
+            });
+
+        $this->mediaDirectory->method('isFile')
+            ->willReturnCallback(function ($path) {
+                return $path === 'catalog/product/cache/image.jpg';
+            });
+
+        $this->mediaDirectory->method('read')
+            ->willReturn(['catalog/product/cache/image.jpg']);
+
+        $this->mediaDirectory->method('readFile')
+            ->willReturn('image content');
+
+        $this->r2Storage->method('saveFile')
+            ->willThrowException(new \Exception('Upload failed'));
+
+        $this->logger->expects($this->once())
+            ->method('error')
+            ->with('Failed to sync image cache file to R2', $this->anything());
+
+        $this->synchronizer->sync();
     }
 }
