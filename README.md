@@ -83,19 +83,24 @@ For Docker/containerized deployments where `pub/media` is mounted read-only:
 
 **Product Image Resizing:**
 
-Read-only mode supports two approaches for product image resizing:
+Read-only mode supports three approaches for product image resizing:
 
 1. **Pre-generation (Recommended)**: Run `bin/magento catalog:images:resize` before deployment to generate all image sizes in R2. Images are processed in `/tmp` and uploaded directly.
 
-2. **On-demand Resizing**: Missing image sizes are generated automatically on first request:
-   - User requests missing size
-   - Module downloads original from R2 → `/tmp`
+2. **Automatic On-Demand Generation**: When image URLs are generated in templates, missing sizes are automatically created in the background:
+   - Template requests image URL (e.g., product listing, product page)
+   - Module checks if image exists in CDN (with Redis caching)
+   - If missing, downloads original from R2 → `/tmp`
    - Resizes in `/tmp`
    - Uploads to R2
-   - Redirects to CDN URL
-   - Subsequent requests served directly from CDN (cached)
+   - Returns URL immediately
+   - Subsequent requests served directly from CDN
 
-**Best Practice**: Pre-generate during deployment, rely on on-demand as fallback for edge cases.
+   This happens transparently - no code changes needed in templates.
+
+3. **Manual On-Demand Endpoint**: Fallback controller endpoint for edge cases where automatic generation doesn't trigger.
+
+**Best Practice**: Pre-generate during deployment, automatic on-demand handles any edge cases seamlessly.
 
 ## Notes
 - The module uses path-style endpoints by default, which is recommended for R2.

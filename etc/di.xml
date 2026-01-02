@@ -39,4 +39,8 @@
     <type name="Magento\Catalog\Model\Product\Image\Cache">
         <plugin name="magezero_r2_product_image_cache" type="MageZero\CloudflareR2\Plugin\Catalog\Product\Image\CachePlugin"/>
     </type>
+
+    <type name="Magento\Catalog\Helper\Image">
+        <plugin name="magezero_r2_catalog_image_helper" type="MageZero\CloudflareR2\Plugin\Catalog\Helper\ImagePlugin"/>
+    </type>
 </config>
