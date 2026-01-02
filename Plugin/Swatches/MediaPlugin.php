@@ -87,7 +87,7 @@ class MediaPlugin
 
             // Temporarily copy to swatch path structure for processing
             $tempSwatchPath = $tempMediaPath . '/' . $fileToRestore;
-            $tempSwatchDir = dirname($tempSwatchPath);
+            $tempSwatchDir = $this->fileDriver->getParentDirectory($tempSwatchPath);
             if (!$this->fileDriver->isDirectory($tempSwatchDir)) {
                 $this->fileDriver->createDirectory($tempSwatchDir, 0755);
             }

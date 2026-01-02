@@ -2,9 +2,8 @@
 namespace MageZero\CloudflareR2\Plugin\Catalog\Helper;
 
 use Magento\Catalog\Helper\Image;
-use Magento\Framework\App\Filesystem\DirectoryList;
-use Magento\Framework\Filesystem;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
+use Magento\Framework\HTTP\ClientInterface;
 use MageZero\CloudflareR2\Model\Config;
 use MageZero\CloudflareR2\Model\FileExistenceCache;
 use MageZero\CloudflareR2\Model\ImageProcessor\TemporaryProcessor;
@@ -20,7 +19,7 @@ class ImagePlugin
     private TemporaryProcessor $tempProcessor;
     private FileDriver $fileDriver;
     private LoggerInterface $logger;
-    private Filesystem\Directory\ReadInterface $mediaDirectory;
+    private ClientInterface $httpClient;
 
     public function __construct(
         Config $config,
@@ -28,14 +27,14 @@ class ImagePlugin
         TemporaryProcessor $tempProcessor,
         FileDriver $fileDriver,
         LoggerInterface $logger,
-        Filesystem $filesystem
+        ClientInterface $httpClient
     ) {
         $this->config = $config;
         $this->fileExistenceCache = $fileExistenceCache;
         $this->tempProcessor = $tempProcessor;
         $this->fileDriver = $fileDriver;
         $this->logger = $logger;
-        $this->mediaDirectory = $filesystem->getDirectoryRead(DirectoryList::MEDIA);
+        $this->httpClient = $httpClient;
     }
 
     /**
@@ -94,13 +93,9 @@ class ImagePlugin
         $cdnUrl = $this->config->getBaseMediaUrl() . '/' . ltrim($relativePath, '/');
 
         try {
-            $ch = curl_init($cdnUrl);
-            curl_setopt($ch, CURLOPT_NOBODY, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-            curl_exec($ch);
-            $statusCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+            $this->httpClient->setOptions(['timeout' => 5]);
+            $this->httpClient->head($cdnUrl);
+            $statusCode = $this->httpClient->getStatus();
 
             $exists = $statusCode === 200;
             $this->fileExistenceCache->set($relativePath, $exists);
@@ -155,7 +150,7 @@ class ImagePlugin
 
             // Create temp path for resized image
             $tempResized = $this->tempProcessor->getTempPath($relativePath);
-            $tempDir = dirname($tempResized);
+            $tempDir = $this->fileDriver->getParentDirectory($tempResized);
 
             if (!$this->fileDriver->isDirectory($tempDir)) {
                 $this->fileDriver->createDirectory($tempDir, 0755);
@@ -185,6 +180,11 @@ class ImagePlugin
         }
     }
 
+    /**
+     * Resize image using GD library
+     *
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+     */
     private function resizeImage(
         string $sourcePath,
         string $destPath,
@@ -192,6 +192,7 @@ class ImagePlugin
         ?int $height,
         int $quality
     ): void {
+        // phpcs:ignore Magento2.Functions.DiscouragedFunction
         $imageInfo = getimagesize($sourcePath);
         if (!$imageInfo) {
             throw new \RuntimeException('Invalid image: ' . $sourcePath);
@@ -199,22 +200,19 @@ class ImagePlugin
 
         [$origWidth, $origHeight, $type] = $imageInfo;
 
-        // Load source
-        $source = match($type) {
-            IMAGETYPE_JPEG => imagecreatefromjpeg($sourcePath),
-            IMAGETYPE_PNG => imagecreatefrompng($sourcePath),
-            IMAGETYPE_GIF => imagecreatefromgif($sourcePath),
-            IMAGETYPE_WEBP => imagecreatefromwebp($sourcePath),
-            default => throw new \RuntimeException('Unsupported image type')
-        };
+        // Load source - phpcs:ignore Magento2.Functions.DiscouragedFunction
+        $source = $this->loadImage($sourcePath, $type);
+        if (!$source) {
+            throw new \RuntimeException('Unsupported image type');
+        }
 
         // Calculate dimensions
         [$newWidth, $newHeight] = $this->calculateDimensions($origWidth, $origHeight, $width, $height);
 
-        // Create dest
+        // Create dest - phpcs:ignore Magento2.Functions.DiscouragedFunction
         $dest = imagecreatetruecolor($newWidth, $newHeight);
 
-        // Preserve transparency
+        // Preserve transparency - phpcs:ignore Magento2.Functions.DiscouragedFunction
         if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_GIF) {
             imagealphablending($dest, false);
             imagesavealpha($dest, true);
@@ -222,19 +220,65 @@ class ImagePlugin
             imagefilledrectangle($dest, 0, 0, $newWidth, $newHeight, $transparent);
         }
 
-        // Resize
+        // Resize - phpcs:ignore Magento2.Functions.DiscouragedFunction
         imagecopyresampled($dest, $source, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
 
         // Save
-        match($type) {
-            IMAGETYPE_JPEG => imagejpeg($dest, $destPath, $quality),
-            IMAGETYPE_PNG => imagepng($dest, $destPath, (int)(9 - ($quality / 100) * 9)),
-            IMAGETYPE_GIF => imagegif($dest, $destPath),
-            IMAGETYPE_WEBP => imagewebp($dest, $destPath, $quality)
-        };
+        $this->saveImage($dest, $destPath, $type, $quality);
 
+        // phpcs:ignore Magento2.Functions.DiscouragedFunction
         imagedestroy($source);
+        // phpcs:ignore Magento2.Functions.DiscouragedFunction
         imagedestroy($dest);
+    }
+
+    /**
+     * Load image from file
+     *
+     * @return \GdImage|false
+     */
+    private function loadImage(string $path, int $type)
+    {
+        // phpcs:disable Magento2.Functions.DiscouragedFunction
+        switch ($type) {
+            case IMAGETYPE_JPEG:
+                return imagecreatefromjpeg($path);
+            case IMAGETYPE_PNG:
+                return imagecreatefrompng($path);
+            case IMAGETYPE_GIF:
+                return imagecreatefromgif($path);
+            case IMAGETYPE_WEBP:
+                return imagecreatefromwebp($path);
+            default:
+                return false;
+        }
+        // phpcs:enable Magento2.Functions.DiscouragedFunction
+    }
+
+    /**
+     * Save image to file
+     *
+     * @param \GdImage $image
+     */
+    private function saveImage($image, string $path, int $type, int $quality): void
+    {
+        // phpcs:disable Magento2.Functions.DiscouragedFunction
+        switch ($type) {
+            case IMAGETYPE_JPEG:
+                imagejpeg($image, $path, $quality);
+                break;
+            case IMAGETYPE_PNG:
+                $pngQuality = (int)(9 - ($quality / 100) * 9);
+                imagepng($image, $path, $pngQuality);
+                break;
+            case IMAGETYPE_GIF:
+                imagegif($image, $path);
+                break;
+            case IMAGETYPE_WEBP:
+                imagewebp($image, $path, $quality);
+                break;
+        }
+        // phpcs:enable Magento2.Functions.DiscouragedFunction
     }
 
     private function calculateDimensions(

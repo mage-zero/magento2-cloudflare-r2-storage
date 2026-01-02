@@ -2,8 +2,6 @@
 namespace MageZero\CloudflareR2\Plugin\Catalog\Product\Image;
 
 use Magento\Catalog\Model\Product\Image\Cache;
-use Magento\Framework\App\Filesystem\DirectoryList;
-use Magento\Framework\Filesystem;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
 use MageZero\CloudflareR2\Model\Config;
 use MageZero\CloudflareR2\Model\ImageProcessor\TemporaryProcessor;
@@ -11,6 +9,8 @@ use Psr\Log\LoggerInterface;
 
 /**
  * Plugin to handle image cache generation in /tmp
+ *
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
  */
 class CachePlugin
 {
@@ -18,20 +18,17 @@ class CachePlugin
     private TemporaryProcessor $tempProcessor;
     private FileDriver $fileDriver;
     private LoggerInterface $logger;
-    private Filesystem\Directory\WriteInterface $mediaDirectory;
 
     public function __construct(
         Config $config,
         TemporaryProcessor $tempProcessor,
         FileDriver $fileDriver,
-        LoggerInterface $logger,
-        Filesystem $filesystem
+        LoggerInterface $logger
     ) {
         $this->config = $config;
         $this->tempProcessor = $tempProcessor;
         $this->fileDriver = $fileDriver;
         $this->logger = $logger;
-        $this->mediaDirectory = $filesystem->getDirectoryWrite(DirectoryList::MEDIA);
     }
 
     /**
@@ -73,24 +70,17 @@ class CachePlugin
 
         // Copy original to temp media structure
         $tempCatalogPath = $tempMediaRoot . '/catalog/product' . $originalImageName;
-        $tempCatalogDir = dirname($tempCatalogPath);
+        $tempCatalogDir = $this->fileDriver->getParentDirectory($tempCatalogPath);
         if (!$this->fileDriver->isDirectory($tempCatalogDir)) {
             $this->fileDriver->createDirectory($tempCatalogDir, 0755);
         }
         $this->fileDriver->copy($tempOriginal, $tempCatalogPath);
 
-        // Temporarily point media directory to our temp location
-        $originalMediaPath = $this->mediaDirectory->getAbsolutePath();
-
-        // Call original resize logic (it will write to pub/media)
-        // Since we can't redirect filesystem writes easily, we need a different approach
-        // Let's generate the resized path and do the resize ourselves
-
         $resizedPath = $this->generateResizedImagePath($originalImageName, $imageParams);
         $tempResizedPath = $this->tempProcessor->getTempPath($resizedPath);
 
         // Ensure directory exists
-        $tempResizedDir = dirname($tempResizedPath);
+        $tempResizedDir = $this->fileDriver->getParentDirectory($tempResizedPath);
         if (!$this->fileDriver->isDirectory($tempResizedDir)) {
             $this->fileDriver->createDirectory($tempResizedDir, 0755);
         }
@@ -122,13 +112,18 @@ class CachePlugin
         return 'catalog/product/cache/' . $sizePath . '/' . $quality . '/' . $imageType . $originalImageName;
     }
 
+    /**
+     * Resize image using GD library
+     *
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+     */
     private function resizeImage(string $sourcePath, string $destPath, array $params): void
     {
         $width = $params['width'] ?? null;
         $height = $params['height'] ?? null;
         $quality = $params['quality'] ?? 80;
 
-        // Get image info
+        // phpcs:ignore Magento2.Functions.DiscouragedFunction
         $imageInfo = getimagesize($sourcePath);
         if (!$imageInfo) {
             throw new \RuntimeException('Invalid image: ' . $sourcePath);
@@ -145,10 +140,10 @@ class CachePlugin
         // Calculate dimensions
         [$newWidth, $newHeight] = $this->calculateDimensions($origWidth, $origHeight, $width, $height);
 
-        // Create resized image
+        // Create resized image - phpcs:ignore Magento2.Functions.DiscouragedFunction
         $dest = imagecreatetruecolor($newWidth, $newHeight);
 
-        // Preserve transparency for PNG/GIF
+        // Preserve transparency for PNG/GIF - phpcs:ignore Magento2.Functions.DiscouragedFunction
         if ($type === IMAGETYPE_PNG || $type === IMAGETYPE_GIF) {
             imagealphablending($dest, false);
             imagesavealpha($dest, true);
@@ -156,19 +151,26 @@ class CachePlugin
             imagefilledrectangle($dest, 0, 0, $newWidth, $newHeight, $transparent);
         }
 
-        // Resize
+        // Resize - phpcs:ignore Magento2.Functions.DiscouragedFunction
         imagecopyresampled($dest, $source, 0, 0, 0, 0, $newWidth, $newHeight, $origWidth, $origHeight);
 
         // Save
         $this->saveImage($dest, $destPath, $type, $quality);
 
-        // Cleanup
+        // Cleanup - phpcs:ignore Magento2.Functions.DiscouragedFunction
         imagedestroy($source);
+        // phpcs:ignore Magento2.Functions.DiscouragedFunction
         imagedestroy($dest);
     }
 
+    /**
+     * Load image from file
+     *
+     * @return \GdImage|false
+     */
     private function loadImage(string $path, int $type)
     {
+        // phpcs:disable Magento2.Functions.DiscouragedFunction
         switch ($type) {
             case IMAGETYPE_JPEG:
                 return imagecreatefromjpeg($path);
@@ -181,17 +183,23 @@ class CachePlugin
             default:
                 return false;
         }
+        // phpcs:enable Magento2.Functions.DiscouragedFunction
     }
 
+    /**
+     * Save image to file
+     *
+     * @param \GdImage $image
+     */
     private function saveImage($image, string $path, int $type, int $quality): void
     {
+        // phpcs:disable Magento2.Functions.DiscouragedFunction
         switch ($type) {
             case IMAGETYPE_JPEG:
                 imagejpeg($image, $path, $quality);
                 break;
             case IMAGETYPE_PNG:
-                // PNG quality is 0-9, convert from 0-100
-                $pngQuality = (int) (9 - ($quality / 100) * 9);
+                $pngQuality = (int)(9 - ($quality / 100) * 9);
                 imagepng($image, $path, $pngQuality);
                 break;
             case IMAGETYPE_GIF:
@@ -201,6 +209,7 @@ class CachePlugin
                 imagewebp($image, $path, $quality);
                 break;
         }
+        // phpcs:enable Magento2.Functions.DiscouragedFunction
     }
 
     private function calculateDimensions(
