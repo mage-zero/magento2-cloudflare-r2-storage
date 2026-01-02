@@ -6,9 +6,8 @@ jobs:
   integration-tests:
     name: Magento Integration Tests
     runs-on: ubuntu-latest
-    if: ${{ github.event.pull_request.base.ref == 'master' }}
     env:
-      REPOSITORY_URL: https://repo-magento-mirror.fooman.co.nz/
+      COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
     services:
       mysql:
         image: mysql:5.7
