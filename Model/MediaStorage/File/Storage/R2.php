@@ -5,6 +5,7 @@ use Aws\Exception\AwsException;
 use Aws\S3\S3Client;
 use Magento\Framework\DataObject;
 use Magento\Framework\Exception\LocalizedException;
+use Magento\Framework\Filesystem\DriverInterface;
 use Magento\MediaStorage\Helper\File\Media as MediaHelper;
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageHelper;
 use MageZero\CloudflareR2\Model\Config;
@@ -21,6 +22,7 @@ class R2 extends DataObject
     private LoggerInterface $logger;
     private S3Client $client;
     private KeyFormatter $keyFormatter;
+    private DriverInterface $driver;
     private array $errors = [];
     private ?array $storageData = null;
 
@@ -29,7 +31,8 @@ class R2 extends DataObject
         MediaHelper $mediaHelper,
         StorageHelper $storageHelper,
         LoggerInterface $logger,
-        R2ClientFactory $clientFactory
+        R2ClientFactory $clientFactory,
+        DriverInterface $driver
     ) {
         parent::__construct();
         $this->config = $config;
@@ -38,6 +41,7 @@ class R2 extends DataObject
         $this->logger = $logger;
         $this->client = $clientFactory->create();
         $this->keyFormatter = new KeyFormatter($this->config->getKeyPrefix());
+        $this->driver = $driver;
     }
 
     public function init(): self
@@ -81,7 +85,7 @@ class R2 extends DataObject
             }
 
             $files[] = $key;
-            $dirName = dirname($key);
+            $dirName = $this->driver->getParentDirectory($key);
             if ($dirName !== '.' && $dirName !== '') {
                 $segments = explode('/', $dirName);
                 $path = '';
@@ -123,9 +127,9 @@ class R2 extends DataObject
                     'Key' => $this->keyFormatter->toKey($filePath),
                 ]);
                 if (isset($object['Body'])) {
-                    $directory = dirname($filePath);
+                    $directory = $this->driver->getParentDirectory($filePath);
                     $result[] = [
-                        'filename' => basename($filePath),
+                        'filename' => $this->driver->getBaseName($filePath),
                         'directory' => $directory === '.' ? null : $directory,
                         'content' => (string)$object['Body'],
                     ];
@@ -310,9 +314,9 @@ class R2 extends DataObject
                     ]);
                     if (isset($content['Body'])) {
                         $relative = $this->keyFormatter->fromKey($object['Key']);
-                        $directory = dirname($relative);
+                        $directory = $this->driver->getParentDirectory($relative);
                         $files[] = [
-                            'filename' => basename($relative),
+                            'filename' => $this->driver->getBaseName($relative),
                             'directory' => $directory === '.' ? null : $directory,
                             'content' => (string)$content['Body'],
                         ];
