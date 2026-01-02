@@ -1,6 +1,6 @@
 # MageZero Cloudflare R2 Storage for Magento 2
 
-Stateless Magento 2 module for Cloudflare R2 media storage. Designed for containerized deployments where images are served directly from R2/CDN without local filesystem writes.
+Magento 2 module for Cloudflare R2 media storage. Designed for containerized deployments where media is stored in R2 and served via CDN.
 
 ## Compatibility
 
@@ -23,12 +23,11 @@ PHPStan runs on PHP 8.3 and 8.4 for static analysis.
 Integration tests run once per Magento version to verify R2 functionality.
 
 ## Features
-- **Stateless/CDN-First Architecture** - Images served directly from R2/CDN, no local filesystem writes
-- **Automatic On-Demand Generation** - Missing image sizes generated transparently when requested
-- **Pre-Generation Support** - CLI command to generate all image sizes before deployment
+- **R2 as Media Storage Backend** - All media files stored in Cloudflare R2
+- **CDN-First Serving** - Images served directly from R2/CDN
+- **Storage-Only Focus** - Module handles storage; Magento core handles image processing
 - **Redis Caching** - CDN file existence checks cached for optimal performance
-- **Docker/Kubernetes Ready** - Designed for ephemeral containers with read-only filesystems
-- Handles product images, WYSIWYG media, and swatch generation in `/tmp`
+- **Docker/Kubernetes Ready** - Works with ephemeral containers using tmpfs mounts
 - S3-compatible API with Cloudflare R2 optimizations
 
 ## Installation
@@ -70,45 +69,62 @@ bin/magento cache:flush
    - Set your R2 bucket to **Public** or configure a [custom domain](https://developers.cloudflare.com/r2/buckets/public-buckets/)
    - Enable Cloudflare CDN caching for best performance
 
+## Container Deployment
+
+For containerized deployments (Docker Swarm, Kubernetes), mount a writable tmpfs on `pub/media`:
+
+**Docker Compose / Swarm:**
+```yaml
+services:
+  php-fpm:
+    volumes:
+      - type: tmpfs
+        target: /var/www/html/pub/media
+```
+
+**Kubernetes:**
+```yaml
+volumes:
+  - name: media-cache
+    emptyDir: {}
+volumeMounts:
+  - name: media-cache
+    mountPath: /var/www/html/pub/media
+```
+
 **How it works:**
-- Images are served directly from R2/CDN (no local filesystem writes)
-- File existence checks use CDN HEAD requests (cached in Redis)
-- Image processing (swatches, resizes) happens in `/tmp` and uploads directly to R2
-- Truly stateless - `pub/media` is never written to (except `/tmp`)
+1. Magento core writes to `pub/media` (tmpfs - writable, ephemeral)
+2. Module syncs files to R2 for persistent storage
+3. Images served from R2/CDN
+4. On container restart, cache regenerates as needed
 
-**Requirements:**
-- Base Media URL must be configured
-- Redis or similar cache backend recommended for file existence caching
-- `/tmp` directory must be writable (standard in containers)
-- R2 bucket must be public or have custom domain configured
+## Product Image Resizing
 
-### Product Image Resizing
+**Pre-generation (Recommended for production):**
+```bash
+bin/magento catalog:images:resize
+```
 
-This module supports three approaches for product image resizing:
+This generates all product image sizes using Magento core, then syncs them to R2.
 
-1. **Pre-generation (Recommended)**: Run `bin/magento catalog:images:resize` before deployment to generate all image sizes. Images are processed in `/tmp` and uploaded directly to R2.
+**On-demand generation:**
+When a requested image size doesn't exist in R2, Magento core generates it to the local tmpfs, and subsequent requests are served from R2/CDN once synced.
 
-2. **Automatic On-Demand Generation**: When image URLs are generated in templates, missing sizes are automatically created:
-   - Template requests image URL (e.g., product listing, product page)
-   - Module checks if image exists in CDN (with Redis caching)
-   - If missing, downloads original from R2 → `/tmp`
-   - Resizes in `/tmp`
-   - Uploads to R2
-   - Returns URL immediately
-   - Subsequent requests served directly from CDN
+## Architecture
 
-   This happens transparently - no code changes needed in templates.
+This module focuses solely on **storage operations**:
+- Uploading files to R2
+- Downloading files from R2
+- Syncing locally generated cache to R2
+- File existence checks (cached in Redis)
 
-3. **Manual On-Demand Endpoint**: Fallback controller endpoint (`/magezero_r2/media/resize`) for edge cases where automatic generation doesn't trigger.
-
-**Best Practice**: Pre-generate during deployment, rely on automatic on-demand as a seamless fallback for any edge cases.
+All image processing (resizing, watermarks, swatch generation) is handled by **Magento core**. The module intercepts storage operations, not image manipulation.
 
 ## Notes
-- This module is designed for stateless/containerized deployments. The local filesystem (`pub/media`) is never written to except `/tmp`.
-- All media files are served directly from R2/CDN - no local sync or downloads.
 - The module uses path-style endpoints by default, which is recommended for R2.
-- Images generated via `bin/magento catalog:images:resize` are processed in `/tmp` and uploaded directly to R2.
 - The **Flush Catalog Images Cache** action clears cached resized images in R2.
+- Redis or similar cache backend recommended for file existence caching.
+- R2 bucket must be public or have custom domain configured.
 
 ## License
 OSL-3.0
