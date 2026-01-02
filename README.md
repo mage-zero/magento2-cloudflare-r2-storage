@@ -2,8 +2,18 @@
 
 Magento 2 module that adds Cloudflare R2 as a media storage backend using the S3 compatible API.
 
-## Supported Magento versions
-- Magento Open Source >= 2.4.6
+## Supported Magento Versions
+
+Requires Magento Open Source 2.4.6 or later.
+
+### Tested Versions
+
+| Magento Version | PHP Version | Unit Tests | Integration Tests |
+|-----------------|-------------|------------|-------------------|
+| 2.4.6-p9        | 8.1         | ✓          | ✓                 |
+| 2.4.7-p4        | 8.2         | ✓          | ✓                 |
+| 2.4.8-p3        | 8.3         | ✓          | -                 |
+| 2.4.8-p3        | 8.4         | ✓          | -                 |
 
 ## Features
 - Adds a "Cloudflare R2 (S3 Compatible)" option to media storage configuration.

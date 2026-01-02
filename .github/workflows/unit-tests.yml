@@ -17,9 +17,9 @@ jobs:
           - php: '8.2'
             magento: '2.4.7-p4'
           - php: '8.3'
-            magento: '2.4.8'
+            magento: '2.4.8-p3'
           - php: '8.4'
-            magento: '2.4.8'
+            magento: '2.4.8-p3'
     steps:
       - uses: actions/checkout@v4
       - name: Unit tests (Magento ${{ matrix.magento }}, PHP 8.1)
