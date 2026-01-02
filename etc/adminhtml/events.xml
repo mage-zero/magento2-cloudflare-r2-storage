@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Event/etc/events.xsd">
+    <event name="clean_catalog_images_cache_after">
+        <observer name="magezero_r2_clean_catalog_images_cache" instance="MageZero\CloudflareR2\Observer\CatalogImageCacheCleanObserver"/>
+    </event>
+</config>

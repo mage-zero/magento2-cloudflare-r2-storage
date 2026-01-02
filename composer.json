@@ -1,0 +1,27 @@
+{
+  "name": "magezero/magento2-cloudflare-r2-storage",
+  "description": "Cloudflare R2 storage adapter for Magento 2 media storage",
+  "type": "magento2-module",
+  "license": ["OSL-3.0"],
+  "require": {
+    "php": "^8.1",
+    "magento/framework": ">=103.0.6",
+    "magento/module-media-storage": ">=100.4.5",
+    "magento/module-cms": ">=104.0.0",
+    "magento/module-swatches": ">=100.4.0",
+    "aws/aws-sdk-php": "^3.0"
+  },
+  "autoload": {
+    "files": [
+      "registration.php"
+    ],
+    "psr-4": {
+      "MageZero\\CloudflareR2\\": ""
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "MageZero\\CloudflareR2\\Test\\": "Test/"
+    }
+  }
+}

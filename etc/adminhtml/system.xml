@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <section id="magezero_r2" translate="label" type="text" sortOrder="900" showInDefault="1" showInWebsite="1" showInStore="0">
+            <label>Cloudflare R2 Storage</label>
+            <resource>MageZero_CloudflareR2::config</resource>
+            <group id="general" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>Connection</label>
+                <depends>
+                    <field id="media_storage_configuration/media_storage">2</field>
+                </depends>
+                <field id="media_url_note" translate="label" type="note" sortOrder="5" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Media URL</label>
+                    <comment>Set the Base URL for User Media Files to your R2 public domain or CDN. You can update it here or under Stores &gt; Configuration &gt; General &gt; Web.</comment>
+                </field>
+                <field id="media_base_url" translate="label" type="text" sortOrder="6" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Base Media URL (Unsecure)</label>
+                    <comment>Example: https://media.example.com/. Leave blank to keep the Magento default (/media/).</comment>
+                    <config_path>web/unsecure/base_media_url</config_path>
+                </field>
+                <field id="media_base_url_secure" translate="label" type="text" sortOrder="7" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Base Media URL (Secure)</label>
+                    <comment>Example: https://media.example.com/. Leave blank to keep the Magento default (/media/).</comment>
+                    <config_path>web/secure/base_media_url</config_path>
+                </field>
+                <field id="account_id" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Account ID</label>
+                    <comment>Used to build the default endpoint when the endpoint field is empty.</comment>
+                </field>
+                <field id="endpoint" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Endpoint</label>
+                    <comment>Example: https://&lt;account-id&gt;.r2.cloudflarestorage.com</comment>
+                </field>
+                <field id="region" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Region</label>
+                    <comment>Use auto for Cloudflare R2.</comment>
+                </field>
+                <field id="bucket" translate="label" type="text" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Bucket</label>
+                </field>
+                <field id="access_key" translate="label" type="text" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Access Key ID</label>
+                </field>
+                <field id="secret_key" translate="label" type="obscure" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Secret Access Key</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
+                </field>
+                <field id="key_prefix" translate="label" type="text" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Key Prefix</label>
+                    <comment>Optional prefix for all media objects, for example: media</comment>
+                </field>
+                <field id="path_style" translate="label" type="select" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Use Path Style Endpoints</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>

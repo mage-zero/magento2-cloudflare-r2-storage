@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <type name="Magento\MediaStorage\Model\Config\Source\Storage\Media\Storage">
+        <plugin name="magezero_r2_storage_option" type="MageZero\CloudflareR2\Plugin\MediaStorage\StorageSourcePlugin"/>
+    </type>
+
+    <type name="Magento\MediaStorage\Model\File\Storage">
+        <plugin name="magezero_r2_storage_model" type="MageZero\CloudflareR2\Plugin\MediaStorage\StorageModelPlugin"/>
+    </type>
+
+    <type name="Magento\MediaStorage\Helper\File\Storage\Database">
+        <plugin name="magezero_r2_storage_db_helper" type="MageZero\CloudflareR2\Plugin\MediaStorage\DatabaseHelperPlugin"/>
+    </type>
+
+    <type name="Magento\MediaStorage\Model\File\Storage\Database">
+        <plugin name="magezero_r2_storage_db" type="MageZero\CloudflareR2\Plugin\MediaStorage\DatabaseStoragePlugin"/>
+    </type>
+
+    <type name="Magento\MediaStorage\Model\File\Storage\Directory\Database">
+        <plugin name="magezero_r2_storage_directory" type="MageZero\CloudflareR2\Plugin\MediaStorage\DirectoryStoragePlugin"/>
+    </type>
+
+    <type name="Magento\MediaStorage\Model\File\Storage\Synchronization">
+        <plugin name="magezero_r2_storage_sync" type="MageZero\CloudflareR2\Plugin\MediaStorage\SynchronizationPlugin"/>
+    </type>
+
+    <type name="Magento\MediaStorage\Service\ImageResize">
+        <plugin name="magezero_r2_resize_sync" type="MageZero\CloudflareR2\Plugin\MediaStorage\ImageResizePlugin"/>
+    </type>
+
+    <type name="Magento\Cms\Model\Wysiwyg\Images\Storage">
+        <plugin name="magezero_r2_cms_wysiwyg" type="MageZero\CloudflareR2\Plugin\Cms\Wysiwyg\Images\StoragePlugin"/>
+    </type>
+
+    <type name="Magento\Swatches\Helper\Media">
+        <plugin name="magezero_r2_swatches_media" type="MageZero\CloudflareR2\Plugin\Swatches\MediaPlugin"/>
+    </type>
+</config>
