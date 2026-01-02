@@ -32,6 +32,8 @@ class ImageResizePlugin
             return $generator;
         }
 
+        // In read-only mode, images are generated in /tmp and uploaded directly
+        // The sync() call is a no-op in read-only mode
         return (function () use ($generator) {
             try {
                 yield from $generator;

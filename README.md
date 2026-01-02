@@ -27,6 +27,7 @@ Integration tests run once per Magento version to verify R2 functionality.
 - Uploads media files to R2 on save/synchronize.
 - Restores media files from R2 when required by Magento.
 - Handles WYSIWYG thumbnails and swatch images while using remote storage.
+- **Read-Only Filesystem Mode** - Serve images directly from R2/CDN without local filesystem writes (ideal for containerized/stateless deployments).
 
 ## Installation
 Install with Composer in your Magento project:
@@ -39,6 +40,8 @@ bin/magento cache:flush
 ```
 
 ## Configuration
+
+### Basic Configuration
 1. Go to **Stores > Configuration > Advanced > System > Media Storage Configuration** and set **Media Storage** to **Cloudflare R2 (S3 Compatible)**.
 2. Go to **Stores > Configuration > MageZero > Cloudflare R2 Storage** and fill in:
    - Account ID (optional if you provide endpoint)
@@ -47,8 +50,36 @@ bin/magento cache:flush
    - Bucket
    - Access Key ID / Secret Access Key
    - Optional key prefix (e.g. `media`)
-   - Base Media URL (unsecure/secure) if you want Magento to serve media from an R2 public domain or CDN
+   - **Base Media URL (unsecure/secure)** - Set this to your R2 public domain or CDN URL
 3. Save config and run **Synchronize** from Media Storage Configuration if you want to push existing media to R2.
+
+### Read-Only Filesystem Mode (Optional)
+
+For Docker/containerized deployments where `pub/media` is mounted read-only:
+
+1. **Configure Base Media URL** (required):
+   - Set **Base Media URL (Secure)** to your R2 public domain or Cloudflare CDN URL
+   - Example: `https://media.example.com` or `https://pub-xxxxx.r2.dev`
+
+2. **Enable Read-Only Mode**:
+   - Go to **Stores > Configuration > MageZero > Cloudflare R2 Storage**
+   - Set **Read-Only Filesystem Mode** to **Yes**
+   - Optionally adjust **File Existence Cache TTL** (default: 3600 seconds)
+
+3. **Configure Cloudflare R2**:
+   - Set your R2 bucket to **Public** or configure a [custom domain](https://developers.cloudflare.com/r2/buckets/public-buckets/)
+   - Enable Cloudflare CDN caching for optimal performance
+
+**How it works:**
+- Images are served directly from R2/CDN (no local downloads)
+- File existence checks use CDN HEAD requests (cached in Redis)
+- Image processing (swatches, resizes) happens in `/tmp` and uploads directly to R2
+- Truly stateless - `pub/media` never written to (except `/tmp`)
+
+**Requirements:**
+- Base Media URL must be configured
+- Redis or similar cache backend recommended for file existence caching
+- `/tmp` directory must be writable (standard in containers)
 
 ## Notes
 - The module uses path-style endpoints by default, which is recommended for R2.
