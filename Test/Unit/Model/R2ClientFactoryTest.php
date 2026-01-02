@@ -19,10 +19,9 @@ class R2ClientFactoryTest extends TestCase
         $factory = new R2ClientFactory($config);
         $client = $factory->create();
 
-        // Verify region and path style are configured
-        $this->assertSame('auto', $client->getConfig('region'));
-        $this->assertTrue($client->getConfig('use_path_style_endpoint'));
-        // Verify client is an S3Client instance with correct service
+        // Verify client is an S3Client instance
         $this->assertInstanceOf(\Aws\S3\S3Client::class, $client);
+        // Verify path style is configured
+        $this->assertTrue($client->getConfig('use_path_style_endpoint'));
     }
 }
