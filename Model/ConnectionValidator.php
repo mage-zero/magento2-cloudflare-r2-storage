@@ -9,10 +9,12 @@ use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\App\Config\Storage\WriterInterface;
 use Magento\Framework\App\Cache\TypeListInterface;
 
+/**
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ */
 class ConnectionValidator
 {
     public const XML_PATH_CONNECTION_VALID = 'magezero_r2/general/connection_valid';
-    private const OBSCURED_VALUE = '******';
 
     private Config $config;
     private ScopeConfigInterface $scopeConfig;
@@ -43,32 +45,79 @@ class ConnectionValidator
         ?string $secretKey = null,
         ?bool $pathStyle = null
     ): array {
-        // Use provided values or fall back to saved config
-        $accountId = $this->resolveValue($accountId, $this->config->getAccountId());
-        $endpoint = $this->resolveValue($endpoint, $this->config->getEndpoint());
-        $region = $this->resolveValue($region, $this->config->getRegion());
-        $bucket = $this->resolveValue($bucket, $this->config->getBucket());
-        $accessKey = $this->resolveValue($accessKey, $this->config->getAccessKey());
-        $secretKey = $this->resolveSecretValue($secretKey, $this->config->getSecretKey());
-        $pathStyle = $pathStyle ?? $this->config->usePathStyle();
+        $credentials = $this->resolveCredentials(
+            $accountId,
+            $endpoint,
+            $region,
+            $bucket,
+            $accessKey,
+            $secretKey,
+            $pathStyle
+        );
+
+        $validationError = $this->validateRequiredFields($credentials);
+        if ($validationError !== null) {
+            return $validationError;
+        }
+
+        return $this->attemptConnection($credentials);
+    }
+
+    /**
+     * Check if a valid connection has been established
+     */
+    public function isConnectionValid(): bool
+    {
+        return (bool) $this->scopeConfig->getValue(self::XML_PATH_CONNECTION_VALID);
+    }
+
+    /**
+     * Resolve credentials from provided values or saved config
+     */
+    private function resolveCredentials(
+        ?string $accountId,
+        ?string $endpoint,
+        ?string $region,
+        ?string $bucket,
+        ?string $accessKey,
+        ?string $secretKey,
+        ?bool $pathStyle
+    ): array {
+        $resolvedAccountId = $this->resolveValue($accountId, $this->config->getAccountId());
+        $resolvedEndpoint = $this->resolveValue($endpoint, $this->config->getEndpoint());
 
         // Build endpoint from account ID if not provided
-        if (empty($endpoint) && !empty($accountId)) {
-            $endpoint = sprintf('https://%s.r2.cloudflarestorage.com', $accountId);
+        if (empty($resolvedEndpoint) && !empty($resolvedAccountId)) {
+            $resolvedEndpoint = sprintf('https://%s.r2.cloudflarestorage.com', $resolvedAccountId);
         }
 
-        // Validate required fields
+        return [
+            'endpoint' => $resolvedEndpoint,
+            'region' => $this->resolveValue($region, $this->config->getRegion()),
+            'bucket' => $this->resolveValue($bucket, $this->config->getBucket()),
+            'accessKey' => $this->resolveValue($accessKey, $this->config->getAccessKey()),
+            'secretKey' => $this->resolveSecretValue($secretKey, $this->config->getSecretKey()),
+            'pathStyle' => $pathStyle ?? $this->config->usePathStyle(),
+        ];
+    }
+
+    /**
+     * Validate required fields and return error array if missing
+     */
+    private function validateRequiredFields(array $credentials): ?array
+    {
         $missingFields = [];
-        if (empty($endpoint)) {
+
+        if (empty($credentials['endpoint'])) {
             $missingFields[] = 'Endpoint (or Account ID)';
         }
-        if (empty($bucket)) {
+        if (empty($credentials['bucket'])) {
             $missingFields[] = 'Bucket';
         }
-        if (empty($accessKey)) {
+        if (empty($credentials['accessKey'])) {
             $missingFields[] = 'Access Key ID';
         }
-        if (empty($secretKey)) {
+        if (empty($credentials['secretKey'])) {
             $missingFields[] = 'Secret Access Key';
         }
 
@@ -79,12 +128,18 @@ class ConnectionValidator
             ];
         }
 
-        try {
-            $client = $this->createClient($endpoint, $region, $accessKey, $secretKey, $pathStyle);
+        return null;
+    }
 
-            // Test by listing objects in the bucket (limited to 1)
+    /**
+     * Attempt to connect to R2 and return result
+     */
+    private function attemptConnection(array $credentials): array
+    {
+        try {
+            $client = $this->createClient($credentials);
             $client->listObjectsV2([
-                'Bucket' => $bucket,
+                'Bucket' => $credentials['bucket'],
                 'MaxKeys' => 1,
             ]);
 
@@ -92,27 +147,10 @@ class ConnectionValidator
 
             return [
                 'success' => true,
-                'message' => 'Connection successful! Bucket "' . $bucket . '" is accessible.',
+                'message' => 'Connection successful! Bucket "' . $credentials['bucket'] . '" is accessible.',
             ];
         } catch (AwsException $e) {
-            $this->saveConnectionStatus(false);
-            $errorCode = $e->getAwsErrorCode() ?? 'Unknown';
-            $errorMessage = $e->getAwsErrorMessage() ?? $e->getMessage();
-
-            // Debug info for signature issues
-            $debug = sprintf(
-                ' [Debug: endpoint=%s, region=%s, accessKey=%s, secretKeyLen=%d, pathStyle=%s]',
-                $endpoint,
-                $region,
-                substr($accessKey, 0, 4) . '...',
-                strlen($secretKey),
-                $pathStyle ? 'true' : 'false'
-            );
-
-            return [
-                'success' => false,
-                'message' => sprintf('Connection failed (%s): %s', $errorCode, $errorMessage) . $debug,
-            ];
+            return $this->handleAwsException($e, $credentials);
         } catch (\Exception $e) {
             $this->saveConnectionStatus(false);
             return [
@@ -123,11 +161,27 @@ class ConnectionValidator
     }
 
     /**
-     * Check if a valid connection has been established
+     * Handle AWS exception and return error array
      */
-    public function isConnectionValid(): bool
+    private function handleAwsException(AwsException $e, array $credentials): array
     {
-        return (bool) $this->scopeConfig->getValue(self::XML_PATH_CONNECTION_VALID);
+        $this->saveConnectionStatus(false);
+        $errorCode = $e->getAwsErrorCode() ?? 'Unknown';
+        $errorMessage = $e->getAwsErrorMessage() ?? $e->getMessage();
+
+        $debug = sprintf(
+            ' [Debug: endpoint=%s, region=%s, accessKey=%s, secretKeyLen=%d, pathStyle=%s]',
+            $credentials['endpoint'],
+            $credentials['region'],
+            substr($credentials['accessKey'], 0, 4) . '...',
+            strlen($credentials['secretKey']),
+            $credentials['pathStyle'] ? 'true' : 'false'
+        );
+
+        return [
+            'success' => false,
+            'message' => sprintf('Connection failed (%s): %s', $errorCode, $errorMessage) . $debug,
+        ];
     }
 
     /**
@@ -160,22 +214,17 @@ class ConnectionValidator
         return $trimmed;
     }
 
-    private function createClient(
-        string $endpoint,
-        string $region,
-        string $accessKey,
-        string $secretKey,
-        bool $pathStyle
-    ): S3Client {
+    private function createClient(array $credentials): S3Client
+    {
         return new S3Client([
             'version' => 'latest',
-            'region' => $region ?: 'auto',
-            'endpoint' => $endpoint,
+            'region' => $credentials['region'] ?: 'auto',
+            'endpoint' => $credentials['endpoint'],
             'credentials' => [
-                'key' => $accessKey,
-                'secret' => $secretKey,
+                'key' => $credentials['accessKey'],
+                'secret' => $credentials['secretKey'],
             ],
-            'use_path_style_endpoint' => $pathStyle,
+            'use_path_style_endpoint' => $credentials['pathStyle'],
             'signature_version' => 'v4',
         ]);
     }

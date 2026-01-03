@@ -8,6 +8,7 @@ use MageZero\CloudflareR2\Model\Config;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
 use MageZero\CloudflareR2\Model\R2ClientFactory;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
+use Magento\Framework\Filesystem\Io\File as IoFile;
 use Magento\MediaStorage\Helper\File\Media as MediaHelper;
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageHelper;
 use PHPUnit\Framework\TestCase;
@@ -45,7 +46,17 @@ class R2Test extends TestCase
         $driver = $this->createMock(FileDriver::class);
         $driver->method('getParentDirectory')->willReturnCallback(fn($path) => dirname($path));
 
-        $this->r2 = new R2($this->config, $mediaHelper, $storageHelper, $logger, $clientFactory, $driver);
+        $ioFile = $this->createMock(IoFile::class);
+        $ioFile->method('getPathInfo')->willReturnCallback(function ($path) {
+            return [
+                'dirname' => dirname($path),
+                'basename' => basename($path),
+                'extension' => pathinfo($path, PATHINFO_EXTENSION),
+                'filename' => pathinfo($path, PATHINFO_FILENAME),
+            ];
+        });
+
+        $this->r2 = new R2($this->config, $mediaHelper, $storageHelper, $logger, $clientFactory, $driver, $ioFile);
     }
 
     public function testGetStorageName(): void

@@ -13,6 +13,8 @@ use Magento\MediaStorage\Model\File\Storage\Flag;
  * getSyncStorageParams() only returns the synced storage type when state
  * is NOTIFIED (3). Without this fix, the admin config save validation fails
  * after page refresh because the synced storage isn't recognized.
+ *
+ * @SuppressWarnings(PHPMD.UnusedFormalParameter)
  */
 class SynchronizeControllerPlugin
 {
@@ -23,6 +25,13 @@ class SynchronizeControllerPlugin
         $this->flag = $flag;
     }
 
+    /**
+     * Set flag state to NOTIFIED after successful sync
+     *
+     * @param Synchronize $subject
+     * @param mixed $result
+     * @return void
+     */
     public function afterExecute(Synchronize $subject, $result): void
     {
         $flag = $this->flag->loadSelf();

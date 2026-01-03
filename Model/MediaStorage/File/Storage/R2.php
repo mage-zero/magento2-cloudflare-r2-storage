@@ -6,6 +6,7 @@ use Aws\S3\S3Client;
 use Magento\Framework\DataObject;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
+use Magento\Framework\Filesystem\Io\File as IoFile;
 use Magento\MediaStorage\Helper\File\Media as MediaHelper;
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageHelper;
 use MageZero\CloudflareR2\Model\Config;
@@ -26,6 +27,7 @@ class R2 extends DataObject
     private S3Client $client;
     private KeyFormatter $keyFormatter;
     private FileDriver $driver;
+    private IoFile $ioFile;
     private array $errors = [];
     private ?array $storageData = null;
 
@@ -35,7 +37,8 @@ class R2 extends DataObject
         StorageHelper $storageHelper,
         LoggerInterface $logger,
         R2ClientFactory $clientFactory,
-        FileDriver $driver
+        FileDriver $driver,
+        ?IoFile $ioFile = null
     ) {
         parent::__construct();
         $this->config = $config;
@@ -45,6 +48,7 @@ class R2 extends DataObject
         $this->client = $clientFactory->create();
         $this->keyFormatter = new KeyFormatter($this->config->getKeyPrefix());
         $this->driver = $driver;
+        $this->ioFile = $ioFile ?? new IoFile();
     }
 
     public function init(): self
@@ -440,7 +444,8 @@ class R2 extends DataObject
         }
 
         // Fall back to extension-based detection
-        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $pathInfo = $this->ioFile->getPathInfo($path);
+        $extension = strtolower($pathInfo['extension'] ?? '');
         $mimeTypes = [
             'jpg' => 'image/jpeg',
             'jpeg' => 'image/jpeg',
