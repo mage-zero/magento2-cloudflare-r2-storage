@@ -1,0 +1,10 @@
+<!--
+/**
+ * MageZero Cloudflare R2 Storage - Test Connection Template
+ */
+-->
+<div data-bind="visible: visible, css: messageClass, text: message"></div>
+<button class="scalable action-default" type="button" data-bind="click: testConnection, attr: {'disabled': loading}">
+    <span data-bind="visible: loading">Testing...</span>
+    <span data-bind="visible: !loading(), text: buttonLabel"></span>
+</button>

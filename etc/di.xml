@@ -35,4 +35,12 @@
     <type name="Magento\Swatches\Helper\Media">
         <plugin name="magezero_r2_swatches_media" type="MageZero\CloudflareR2\Plugin\Swatches\MediaPlugin"/>
     </type>
+
+    <type name="Magento\MediaStorage\Controller\Adminhtml\System\Config\System\Storage\Synchronize">
+        <plugin name="magezero_r2_sync_notified" type="MageZero\CloudflareR2\Plugin\MediaStorage\SynchronizeControllerPlugin"/>
+    </type>
+
+    <type name="Magento\MediaStorage\Block\System\Config\System\Storage\Media\Synchronize">
+        <plugin name="magezero_r2_sync_template" type="MageZero\CloudflareR2\Block\MediaStorage\System\Config\System\Storage\Media\Synchronize\Plugin"/>
+    </type>
 </config>

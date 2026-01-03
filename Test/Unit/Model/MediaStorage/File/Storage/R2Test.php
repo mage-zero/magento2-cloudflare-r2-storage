@@ -7,7 +7,7 @@ use Aws\S3\S3Client;
 use MageZero\CloudflareR2\Model\Config;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
 use MageZero\CloudflareR2\Model\R2ClientFactory;
-use Magento\Framework\Filesystem\DriverInterface;
+use Magento\Framework\Filesystem\Driver\File as FileDriver;
 use Magento\MediaStorage\Helper\File\Media as MediaHelper;
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageHelper;
 use PHPUnit\Framework\TestCase;
@@ -42,8 +42,7 @@ class R2Test extends TestCase
         $clientFactory = $this->createMock(R2ClientFactory::class);
         $clientFactory->method('create')->willReturn($this->s3Client);
 
-        $driver = $this->getMockBuilder(DriverInterface::class)
-            ->getMockForAbstractClass();
+        $driver = $this->createMock(FileDriver::class);
         $driver->method('getParentDirectory')->willReturnCallback(fn($path) => dirname($path));
 
         $this->r2 = new R2($this->config, $mediaHelper, $storageHelper, $logger, $clientFactory, $driver);
@@ -162,9 +161,9 @@ class R2Test extends TestCase
         $this->assertNull($this->r2->getData('filename'));
     }
 
-    public function testGetConnectionNameReturnsNull(): void
+    public function testGetConnectionNameReturnsR2(): void
     {
-        $this->assertNull($this->r2->getConnectionName());
+        $this->assertEquals('r2', $this->r2->getConnectionName());
     }
 
     public function testInitReturnsSelf(): void
@@ -368,5 +367,156 @@ class R2Test extends TestCase
         $result = $this->r2->clear();
 
         $this->assertSame($this->r2, $result);
+    }
+
+    /**
+     * Test extension-based MIME type detection (using empty content to skip finfo detection).
+     */
+    public function testSaveFileSetsContentTypeByExtensionForJpeg(): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) {
+                return isset($params['ContentType'])
+                    && $params['ContentType'] === 'image/jpeg';
+            }));
+
+        $this->r2->saveFile([
+            'filename' => 'test.jpg',
+            'directory' => 'catalog/product',
+            'content' => '', // Empty content triggers extension-based detection
+        ]);
+    }
+
+    /**
+     * Test that ContentDisposition is set to inline for image types.
+     */
+    public function testSaveFileSetsContentDispositionInlineForImages(): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) {
+                return isset($params['ContentDisposition'])
+                    && $params['ContentDisposition'] === 'inline';
+            }));
+
+        $this->r2->saveFile([
+            'filename' => 'test.png',
+            'directory' => 'catalog/product',
+            'content' => '', // Empty content triggers extension-based detection
+        ]);
+    }
+
+    /**
+     * Test extension-based MIME type detection for various file types.
+     * Uses empty content to ensure extension-based fallback is used.
+     *
+     * @dataProvider mimeTypeDataProvider
+     */
+    public function testSaveFileSetsCorrectContentTypeByExtension(string $filename, string $expectedMime): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) use ($expectedMime) {
+                return isset($params['ContentType'])
+                    && $params['ContentType'] === $expectedMime;
+            }));
+
+        $this->r2->saveFile([
+            'filename' => $filename,
+            'directory' => 'catalog',
+            'content' => '', // Empty content triggers extension-based detection
+        ]);
+    }
+
+    public static function mimeTypeDataProvider(): array
+    {
+        return [
+            'jpeg' => ['test.jpeg', 'image/jpeg'],
+            'jpg' => ['test.jpg', 'image/jpeg'],
+            'png' => ['test.png', 'image/png'],
+            'gif' => ['test.gif', 'image/gif'],
+            'webp' => ['test.webp', 'image/webp'],
+            'svg' => ['test.svg', 'image/svg+xml'],
+            'pdf' => ['document.pdf', 'application/pdf'],
+            'css' => ['styles.css', 'text/css'],
+            'js' => ['script.js', 'application/javascript'],
+        ];
+    }
+
+    /**
+     * Test that ContentDisposition is set to inline for displayable content types.
+     * Uses empty content to ensure extension-based MIME detection.
+     *
+     * @dataProvider inlineContentTypeDataProvider
+     */
+    public function testSaveFileSetsInlineDispositionForDisplayableTypes(string $filename): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) {
+                return isset($params['ContentDisposition'])
+                    && $params['ContentDisposition'] === 'inline';
+            }));
+
+        $this->r2->saveFile([
+            'filename' => $filename,
+            'directory' => 'catalog',
+            'content' => '', // Empty content triggers extension-based detection
+        ]);
+    }
+
+    public static function inlineContentTypeDataProvider(): array
+    {
+        return [
+            'jpeg' => ['test.jpeg'],
+            'png' => ['test.png'],
+            'gif' => ['test.gif'],
+            'pdf' => ['document.pdf'],
+            'css' => ['styles.css'],
+            'js' => ['script.js'],
+            'txt' => ['readme.txt'],
+            'html' => ['page.html'],
+            'mp4' => ['video.mp4'],
+            'mp3' => ['audio.mp3'],
+        ];
+    }
+
+    /**
+     * Test that ContentDisposition is NOT set for non-displayable types like zip.
+     */
+    public function testSaveFileDoesNotSetContentDispositionForZip(): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) {
+                return !isset($params['ContentDisposition']);
+            }));
+
+        $this->r2->saveFile([
+            'filename' => 'archive.zip',
+            'directory' => 'downloads',
+            'content' => '', // Empty content, and zip has no MIME mapping so no ContentType/ContentDisposition
+        ]);
+    }
+
+    /**
+     * Test that finfo-based content detection works when content is provided.
+     * Plain text content should be detected as text/plain.
+     */
+    public function testSaveFileUsesFinfoForContentBasedMimeDetection(): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) {
+                return isset($params['ContentType'])
+                    && $params['ContentType'] === 'text/plain';
+            }));
+
+        $this->r2->saveFile([
+            'filename' => 'test.unknown',
+            'directory' => 'catalog',
+            'content' => 'This is plain text content',
+        ]);
     }
 }

@@ -1,0 +1,26 @@
+<?php
+/**
+ * @var \MageZero\CloudflareR2\Block\Adminhtml\System\Config\TestConnection $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+?>
+<div data-bind="scope: 'r2-test-connection'" class="scalable">
+    <!-- ko template: getTemplate() --><!-- /ko -->
+</div>
+<script type="text/x-magento-init">
+    {
+        "*": {
+            "Magento_Ui/js/core/app": {
+                "components": {
+                    "r2-test-connection": {
+                        "component": "MageZero_CloudflareR2/js/testconnection",
+                        "success": <?= $block->isConnectionValid() ? 'true' : 'false' ?>,
+                        "url": <?= json_encode($block->getAjaxUrl()) ?>,
+                        "buttonLabel": <?= json_encode((string) $block->getButtonLabel()) ?>,
+                        "fieldMapping": <?= json_encode($block->getFieldMapping()) ?>
+                    }
+                }
+            }
+        }
+    }
+</script>
