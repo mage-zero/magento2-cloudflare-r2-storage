@@ -6,6 +6,8 @@
                 <region>auto</region>
                 <path_style>1</path_style>
                 <key_prefix></key_prefix>
+                <connection_valid>0</connection_valid>
+                <secret_key backend_model="Magento\Config\Model\Config\Backend\Encrypted" />
             </general>
         </magezero_r2>
     </default>

@@ -1,62 +1,78 @@
 <?xml version="1.0"?>
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
     <system>
+        <tab id="magezero" translate="label" sortOrder="500">
+            <label>MageZero</label>
+        </tab>
         <section id="magezero_r2" translate="label" type="text" sortOrder="900" showInDefault="1" showInWebsite="1" showInStore="0">
+            <tab>magezero</tab>
             <label>Cloudflare R2 Storage</label>
             <resource>MageZero_CloudflareR2::config</resource>
             <group id="general" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
                 <label>Connection</label>
-                <depends>
-                    <field id="media_storage_configuration/media_storage">2</field>
-                </depends>
-                <field id="media_url_note" translate="label" type="note" sortOrder="5" showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Media URL</label>
-                    <comment>Set the Base URL for User Media Files to your R2 public domain or CDN. You can update it here or under Stores &gt; Configuration &gt; General &gt; Web.</comment>
-                </field>
-                <field id="media_base_url" translate="label" type="text" sortOrder="6" showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Base Media URL (Unsecure)</label>
-                    <comment>Example: https://media.example.com/. Leave blank to keep the Magento default (/media/).</comment>
-                    <config_path>web/unsecure/base_media_url</config_path>
-                </field>
-                <field id="media_base_url_secure" translate="label" type="text" sortOrder="7" showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Base Media URL (Secure)</label>
-                    <comment>Example: https://media.example.com/. Leave blank to keep the Magento default (/media/).</comment>
-                    <config_path>web/secure/base_media_url</config_path>
-                </field>
+                <comment><![CDATA[Configure your Cloudflare R2 credentials below and use "Test Connection" to verify. Once verified, R2 will appear as a Media Storage option under System > Configuration > Advanced > System > Storage Configuration for Media.]]></comment>
                 <field id="account_id" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Account ID</label>
-                    <comment>Used to build the default endpoint when the endpoint field is empty.</comment>
+                    <comment>Your Cloudflare Account ID. Used to build the default endpoint when the endpoint field is empty.</comment>
                 </field>
                 <field id="endpoint" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Endpoint</label>
-                    <comment>Example: https://&lt;account-id&gt;.r2.cloudflarestorage.com</comment>
+                    <comment>Example: https://&lt;account-id&gt;.r2.cloudflarestorage.com (leave empty to auto-generate from Account ID)</comment>
                 </field>
                 <field id="region" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Region</label>
-                    <comment>Use auto for Cloudflare R2.</comment>
+                    <comment>Use "auto" for Cloudflare R2 (default if left empty).</comment>
                 </field>
                 <field id="bucket" translate="label" type="text" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Bucket</label>
+                    <comment>The name of your R2 bucket.</comment>
                 </field>
                 <field id="access_key" translate="label" type="text" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Access Key ID</label>
+                    <comment>R2 API Token Access Key ID from Cloudflare dashboard.</comment>
                 </field>
                 <field id="secret_key" translate="label" type="obscure" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Secret Access Key</label>
+                    <comment>R2 API Token Secret Access Key from Cloudflare dashboard.</comment>
                     <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                 </field>
-                <field id="key_prefix" translate="label" type="text" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="0">
-                    <label>Key Prefix</label>
-                    <comment>Optional prefix for all media objects, for example: media</comment>
-                </field>
-                <field id="path_style" translate="label" type="select" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="0">
+                <field id="path_style" translate="label" type="select" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>Use Path Style Endpoints</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Enable for path-style URLs (bucket in path). Default is virtual-hosted style.</comment>
+                </field>
+                <field id="test_connection" translate="button_label" sortOrder="75" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label/>
+                    <button_label>Test Connection</button_label>
+                    <frontend_model>MageZero\CloudflareR2\Block\Adminhtml\System\Config\TestConnection</frontend_model>
+                    <comment>Save configuration first, then test the connection. Once verified, R2 will be available as a Media Storage option.</comment>
+                </field>
+                <field id="key_prefix" translate="label" type="text" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Key Prefix</label>
+                    <comment>Optional prefix for all media objects, for example: media</comment>
                 </field>
                 <field id="cache_ttl" translate="label" type="text" sortOrder="90" showInDefault="1" showInWebsite="1" showInStore="0">
                     <label>File Existence Cache TTL (seconds)</label>
                     <comment>How long to cache CDN file existence checks in Redis. Default: 3600 (1 hour)</comment>
                     <validate>validate-number validate-zero-or-greater</validate>
+                </field>
+            </group>
+            <group id="media_url" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="0">
+                <label>Media URL Configuration</label>
+                <comment><![CDATA[Configure your public media URL after enabling R2 storage.]]></comment>
+                <field id="media_url_note" translate="label" type="note" sortOrder="5" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Important</label>
+                    <comment>Set the Base URL for User Media Files to your R2 public domain or CDN. You can also update this under Stores > Configuration > General > Web.</comment>
+                </field>
+                <field id="media_base_url" translate="label" type="text" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Base Media URL (Unsecure)</label>
+                    <comment>Example: https://media.example.com/. Leave blank to keep the Magento default (/media/).</comment>
+                    <config_path>web/unsecure/base_media_url</config_path>
+                </field>
+                <field id="media_base_url_secure" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="0">
+                    <label>Base Media URL (Secure)</label>
+                    <comment>Example: https://media.example.com/. Leave blank to keep the Magento default (/media/).</comment>
+                    <config_path>web/secure/base_media_url</config_path>
                 </field>
             </group>
         </section>

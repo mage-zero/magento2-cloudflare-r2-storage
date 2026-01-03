@@ -5,7 +5,8 @@ use Aws\Exception\AwsException;
 use Aws\S3\S3Client;
 use Magento\Framework\DataObject;
 use Magento\Framework\Exception\LocalizedException;
-use Magento\Framework\Filesystem\DriverInterface;
+use Magento\Framework\Filesystem\Driver\File as FileDriver;
+use Magento\Framework\Filesystem\Io\File as IoFile;
 use Magento\MediaStorage\Helper\File\Media as MediaHelper;
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageHelper;
 use MageZero\CloudflareR2\Model\Config;
@@ -15,6 +16,7 @@ use Psr\Log\LoggerInterface;
 
 /**
  * @SuppressWarnings(PHPMD.UnusedFormalParameter)
+ * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
 class R2 extends DataObject
 {
@@ -25,7 +27,8 @@ class R2 extends DataObject
     private LoggerInterface $logger;
     private S3Client $client;
     private KeyFormatter $keyFormatter;
-    private DriverInterface $driver;
+    private FileDriver $driver;
+    private IoFile $ioFile;
     private array $errors = [];
     private ?array $storageData = null;
 
@@ -35,7 +38,8 @@ class R2 extends DataObject
         StorageHelper $storageHelper,
         LoggerInterface $logger,
         R2ClientFactory $clientFactory,
-        DriverInterface $driver
+        FileDriver $driver,
+        ?IoFile $ioFile = null
     ) {
         parent::__construct();
         $this->config = $config;
@@ -45,6 +49,7 @@ class R2 extends DataObject
         $this->client = $clientFactory->create();
         $this->keyFormatter = new KeyFormatter($this->config->getKeyPrefix());
         $this->driver = $driver;
+        $this->ioFile = $ioFile ?? new IoFile();
     }
 
     public function init(): self
@@ -64,14 +69,21 @@ class R2 extends DataObject
 
     public function clear(): self
     {
+        $this->logger->info('R2 Storage: clear() called');
         $keys = $this->listAllKeys();
+        $this->logger->info('R2 Storage: clear() found ' . count($keys) . ' keys to delete');
         $this->deleteKeys($keys);
+        $this->logger->info('R2 Storage: clear() completed');
         return $this;
     }
 
-    public function getConnectionName()
+    public function getConnectionName(): string
     {
-        return null;
+        // Must return a non-empty string for the admin JS validator to work.
+        // The JS getConnectionName() returns empty string for storage types > 0
+        // with no connection, which prevents the storage from being added to
+        // allowedStorages and blocks saving.
+        return 'r2';
     }
 
     public function getStorageData(): array
@@ -149,20 +161,24 @@ class R2 extends DataObject
 
     public function importDirectories(array $dirs = [])
     {
+        $this->logger->info('R2 Storage: importDirectories() called with ' . count($dirs) . ' directories');
         return $this;
     }
 
     public function importFiles(array $files = [])
     {
+        $this->logger->info('R2 Storage: importFiles() called with ' . count($files) . ' files');
         foreach ($files as $file) {
             try {
                 $path = $this->buildPathFromFile($file);
+                $this->logger->info('R2 Storage: uploading file ' . $path);
                 $this->client->putObject($this->buildPutObjectParams($path, $file['content'] ?? ''));
             } catch (AwsException $exception) {
                 $this->errors[] = $exception->getMessage();
                 $this->logger->critical($exception->getMessage());
             }
         }
+        $this->logger->info('R2 Storage: importFiles() completed');
 
         return $this;
     }
@@ -382,14 +398,80 @@ class R2 extends DataObject
             'Body' => $content,
         ];
 
-        if (function_exists('GuzzleHttp\\Psr7\\mimetype_from_filename')) {
-            $mime = \GuzzleHttp\Psr7\mimetype_from_filename($path);
-            if ($mime) {
-                $params['ContentType'] = $mime;
+        $mime = $this->detectMimeType($path, $content);
+        if ($mime !== null) {
+            $params['ContentType'] = $mime;
+            if ($this->isInlineContentType($mime)) {
+                $params['ContentDisposition'] = 'inline';
             }
         }
 
         return $params;
+    }
+
+    private function isInlineContentType(string $mime): bool
+    {
+        $inlineTypes = [
+            'image/',
+            'text/plain',
+            'text/css',
+            'text/html',
+            'application/javascript',
+            'application/json',
+            'application/xml',
+            'application/pdf',
+            'video/',
+            'audio/',
+        ];
+
+        foreach ($inlineTypes as $type) {
+            if (str_starts_with($mime, $type)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function detectMimeType(string $path, string $content): ?string
+    {
+        // Try to detect from content using finfo
+        if ($content !== '') {
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->buffer($content);
+            if ($mime !== false && $mime !== 'application/octet-stream') {
+                return $mime;
+            }
+        }
+
+        // Fall back to extension-based detection
+        $pathInfo = $this->ioFile->getPathInfo($path);
+        $extension = strtolower($pathInfo['extension'] ?? '');
+        $mimeTypes = [
+            'jpg' => 'image/jpeg',
+            'jpeg' => 'image/jpeg',
+            'png' => 'image/png',
+            'gif' => 'image/gif',
+            'webp' => 'image/webp',
+            'svg' => 'image/svg+xml',
+            'bmp' => 'image/bmp',
+            'ico' => 'image/vnd.microsoft.icon',
+            'tiff' => 'image/tiff',
+            'tif' => 'image/tiff',
+            'pdf' => 'application/pdf',
+            'txt' => 'text/plain',
+            'css' => 'text/css',
+            'js' => 'application/javascript',
+            'json' => 'application/json',
+            'xml' => 'application/xml',
+            'html' => 'text/html',
+            'htm' => 'text/html',
+            'mp4' => 'video/mp4',
+            'mp3' => 'audio/mpeg',
+            'zip' => 'application/zip',
+        ];
+
+        return $mimeTypes[$extension] ?? null;
     }
 
     private function buildKeyPrefix(string $path): string

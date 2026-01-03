@@ -66,12 +66,12 @@ class Config
 
     public function getAccessKey(): string
     {
-        return (string)$this->scopeConfig->getValue(self::XML_PATH_ACCESS_KEY);
+        return trim((string)$this->scopeConfig->getValue(self::XML_PATH_ACCESS_KEY));
     }
 
     public function getSecretKey(): string
     {
-        return (string)$this->scopeConfig->getValue(self::XML_PATH_SECRET_KEY);
+        return trim((string)$this->scopeConfig->getValue(self::XML_PATH_SECRET_KEY));
     }
 
     public function getKeyPrefix(): string
