@@ -125,6 +125,7 @@ All image processing (resizing, watermarks, swatch generation) is handled by **M
 - The **Flush Catalog Images Cache** action clears cached resized images in R2.
 - Redis or similar cache backend recommended for file existence caching.
 - R2 bucket must be public or have custom domain configured.
+- **CAPTCHA images**: Magento generates CAPTCHA images locally under `pub/media/captcha/**`. If your **Base Media URL** points at R2/CDN, those images must also exist in R2 to avoid 404s (e.g. admin login CAPTCHA). This module uploads generated CAPTCHA images to R2 when R2 storage is selected. Consider adding an R2 lifecycle rule to expire/delete objects under the `captcha/` prefix.
 
 ## License
 OSL-3.0

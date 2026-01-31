@@ -6,6 +6,7 @@
     <module name="MageZero_CloudflareR2" setup_version="1.0.0">
         <sequence>
             <module name="Magento_MediaStorage"/>
+            <module name="Magento_Captcha"/>
             <module name="Magento_Cms"/>
             <module name="Magento_Swatches"/>
         </sequence>

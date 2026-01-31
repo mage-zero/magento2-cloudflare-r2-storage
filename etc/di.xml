@@ -36,6 +36,10 @@
         <plugin name="magezero_r2_swatches_media" type="MageZero\CloudflareR2\Plugin\Swatches\MediaPlugin"/>
     </type>
 
+    <type name="Magento\Captcha\Model\DefaultModel">
+        <plugin name="magezero_r2_captcha_upload" type="MageZero\CloudflareR2\Plugin\Captcha\DefaultModelPlugin"/>
+    </type>
+
     <type name="Magento\MediaStorage\Controller\Adminhtml\System\Config\System\Storage\Synchronize">
         <plugin name="magezero_r2_sync_notified" type="MageZero\CloudflareR2\Plugin\MediaStorage\SynchronizeControllerPlugin"/>
     </type>
