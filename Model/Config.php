@@ -33,6 +33,14 @@ class Config
             \MageZero\CloudflareR2\Model\MediaStorage\File\Storage::STORAGE_MEDIA_R2;
     }
 
+    public function isR2Configured(): bool
+    {
+        return $this->getEndpoint() !== '' &&
+            $this->getBucket() !== '' &&
+            $this->getAccessKey() !== '' &&
+            $this->getSecretKey() !== '';
+    }
+
     public function getAccountId(): string
     {
         return trim((string)$this->scopeConfig->getValue(self::XML_PATH_ACCOUNT_ID));

@@ -2,6 +2,8 @@
 namespace MageZero\CloudflareR2\Plugin\Captcha;
 
 use MageZero\CloudflareR2\Model\Config;
+use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
+use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 use Magento\Captcha\Model\DefaultModel;
 use Magento\Framework\App\Filesystem\DirectoryList;
 use Magento\Framework\Exception\LocalizedException;
@@ -23,24 +25,28 @@ class DefaultModelPlugin
 {
     private Config $config;
     private Database $database;
+    private R2Factory $r2Factory;
+    private ?R2 $r2StorageModel = null;
     private Filesystem\Directory\WriteInterface $mediaDirectory;
     private LoggerInterface $logger;
 
     public function __construct(
         Config $config,
         Database $database,
+        R2Factory $r2Factory,
         Filesystem $filesystem,
         LoggerInterface $logger
     ) {
         $this->config = $config;
         $this->database = $database;
+        $this->r2Factory = $r2Factory;
         $this->mediaDirectory = $filesystem->getDirectoryWrite(DirectoryList::MEDIA, DriverPool::FILE);
         $this->logger = $logger;
     }
 
     public function afterGenerate(DefaultModel $subject, $result)
     {
-        if (!$this->config->isR2Selected()) {
+        if (!$this->config->isR2Selected() && !$this->config->isR2Configured()) {
             return $result;
         }
 
@@ -59,7 +65,14 @@ class DefaultModelPlugin
         }
 
         try {
-            $this->database->getStorageDatabaseModel()->saveFile($relativePath);
+            if ($this->config->isR2Selected()) {
+                $this->database->getStorageDatabaseModel()->saveFile($relativePath);
+            } else {
+                if ($this->r2StorageModel === null) {
+                    $this->r2StorageModel = $this->r2Factory->create();
+                }
+                $this->r2StorageModel->saveFile($relativePath);
+            }
         } catch (LocalizedException $exception) {
             $this->logger->warning('R2 Storage: Unable to upload CAPTCHA image to R2: ' . $exception->getMessage());
         } catch (\Throwable $exception) {
@@ -69,4 +82,3 @@ class DefaultModelPlugin
         return $result;
     }
 }
-
