@@ -226,6 +226,7 @@ class ConnectionValidator
             ],
             'use_path_style_endpoint' => $credentials['pathStyle'],
             'signature_version' => 'v4',
+            'suppress_php_deprecation_warning' => true,
         ]);
     }
 }

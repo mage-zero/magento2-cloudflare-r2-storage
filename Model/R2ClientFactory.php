@@ -23,6 +23,7 @@ class R2ClientFactory
             ],
             'use_path_style_endpoint' => $this->config->usePathStyle(),
             'signature_version' => 'v4',
+            'suppress_php_deprecation_warning' => true,
         ];
 
         $endpoint = $this->config->getEndpoint();
