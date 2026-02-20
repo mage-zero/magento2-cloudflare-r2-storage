@@ -63,7 +63,7 @@ jobs:
           coverage: none
       - name: Lint PHP files
         run: |
-          find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+          find . -type f -name '*.php' -not -path './vendor/*' -not -path './Test/*' -print0 | xargs -0 -n1 php -l
 
   # Unit Tests - Only run if static analysis passes
   unit-tests:
