@@ -425,7 +425,7 @@ class R2 extends DataObject
         ];
 
         foreach ($inlineTypes as $type) {
-            if (str_starts_with($mime, $type)) {
+            if (strpos($mime, $type) === 0) {
                 return true;
             }
         }
