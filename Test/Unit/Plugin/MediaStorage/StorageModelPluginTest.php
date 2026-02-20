@@ -12,11 +12,15 @@ use PHPUnit\Framework\TestCase;
 
 class StorageModelPluginTest extends TestCase
 {
-    private StorageHelper|MockObject $storageHelper;
-    private R2Factory|MockObject $r2Factory;
-    private R2|MockObject $r2Model;
+    /** @var StorageHelper&MockObject */
+    private MockObject $storageHelper;
+    /** @var R2Factory&MockObject */
+    private MockObject $r2Factory;
+    /** @var R2&MockObject */
+    private MockObject $r2Model;
     private StorageModelPlugin $plugin;
-    private Storage|MockObject $subject;
+    /** @var Storage&MockObject */
+    private MockObject $subject;
 
     protected function setUp(): void
     {

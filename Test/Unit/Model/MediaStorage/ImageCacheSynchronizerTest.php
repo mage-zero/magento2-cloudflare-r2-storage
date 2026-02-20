@@ -14,11 +14,16 @@ use Psr\Log\LoggerInterface;
 
 class ImageCacheSynchronizerTest extends TestCase
 {
-    private Config|MockObject $config;
-    private MediaConfig|MockObject $mediaConfig;
-    private ReadInterface|MockObject $mediaDirectory;
-    private R2|MockObject $r2Storage;
-    private LoggerInterface|MockObject $logger;
+    /** @var Config&MockObject */
+    private MockObject $config;
+    /** @var MediaConfig&MockObject */
+    private MockObject $mediaConfig;
+    /** @var ReadInterface&MockObject */
+    private MockObject $mediaDirectory;
+    /** @var R2&MockObject */
+    private MockObject $r2Storage;
+    /** @var LoggerInterface&MockObject */
+    private MockObject $logger;
     private ImageCacheSynchronizer $synchronizer;
 
     protected function setUp(): void

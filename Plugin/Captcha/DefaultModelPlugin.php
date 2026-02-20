@@ -50,20 +50,37 @@ class DefaultModelPlugin
             return $result;
         }
 
+        $relativePath = $this->resolveCaptchaRelativePath($subject);
+        if ($relativePath === null) {
+            return $result;
+        }
+
+        $this->uploadToR2($relativePath);
+
+        return $result;
+    }
+
+    private function resolveCaptchaRelativePath(DefaultModel $subject): ?string
+    {
         $imgDir = (string)$subject->getImgDir();
         $id = (string)$subject->getId();
         $suffix = (string)$subject->getSuffix();
 
         if ($imgDir === '' || $id === '' || $suffix === '') {
-            return $result;
+            return null;
         }
 
         $absolutePath = rtrim($imgDir, '/') . '/' . $id . $suffix;
         $relativePath = ltrim($this->mediaDirectory->getRelativePath($absolutePath), '/');
         if ($relativePath === '' || !$this->mediaDirectory->isFile($relativePath)) {
-            return $result;
+            return null;
         }
 
+        return $relativePath;
+    }
+
+    private function uploadToR2(string $relativePath): void
+    {
         try {
             if ($this->config->isR2Selected()) {
                 $this->database->getStorageDatabaseModel()->saveFile($relativePath);
@@ -78,7 +95,5 @@ class DefaultModelPlugin
         } catch (\Throwable $exception) {
             $this->logger->warning('R2 Storage: Unexpected error uploading CAPTCHA image to R2: ' . $exception->getMessage());
         }
-
-        return $result;
     }
 }

@@ -11,11 +11,15 @@ use PHPUnit\Framework\TestCase;
 
 class MediaPluginTest extends TestCase
 {
-    private Config|MockObject $config;
-    private MediaConfig|MockObject $mediaConfig;
-    private Database|MockObject $fileStorageDb;
+    /** @var Config&MockObject */
+    private MockObject $config;
+    /** @var MediaConfig&MockObject */
+    private MockObject $mediaConfig;
+    /** @var Database&MockObject */
+    private MockObject $fileStorageDb;
     private MediaPlugin $plugin;
-    private Media|MockObject $subject;
+    /** @var Media&MockObject */
+    private MockObject $subject;
 
     protected function setUp(): void
     {

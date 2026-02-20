@@ -15,14 +15,21 @@ use PHPUnit\Framework\TestCase;
 
 class StoragePluginTest extends TestCase
 {
-    private Config|MockObject $config;
-    private Database|MockObject $database;
-    private Database|MockObject $coreFileStorageDb;
-    private WriteInterface|MockObject $directory;
-    private DatabaseFactory|MockObject $directoryDatabaseFactory;
-    private DirectoryDatabase|MockObject $directoryDatabase;
+    /** @var Config&MockObject */
+    private MockObject $config;
+    /** @var Database&MockObject */
+    private MockObject $database;
+    /** @var Database&MockObject */
+    private MockObject $coreFileStorageDb;
+    /** @var WriteInterface&MockObject */
+    private MockObject $directory;
+    /** @var DatabaseFactory&MockObject */
+    private MockObject $directoryDatabaseFactory;
+    /** @var DirectoryDatabase&MockObject */
+    private MockObject $directoryDatabase;
     private StoragePlugin $plugin;
-    private Storage|MockObject $subject;
+    /** @var Storage&MockObject */
+    private MockObject $subject;
 
     protected function setUp(): void
     {

@@ -16,12 +16,17 @@ use Psr\Log\LoggerInterface;
 
 class SynchronizationPluginTest extends TestCase
 {
-    private Config|MockObject $config;
-    private FileExistenceCache|MockObject $fileExistenceCache;
-    private ClientInterface|MockObject $httpClient;
-    private LoggerInterface|MockObject $logger;
+    /** @var Config&MockObject */
+    private MockObject $config;
+    /** @var FileExistenceCache&MockObject */
+    private MockObject $fileExistenceCache;
+    /** @var ClientInterface&MockObject */
+    private MockObject $httpClient;
+    /** @var LoggerInterface&MockObject */
+    private MockObject $logger;
     private SynchronizationPlugin $plugin;
-    private Synchronization|MockObject $subject;
+    /** @var Synchronization&MockObject */
+    private MockObject $subject;
 
     protected function setUp(): void
     {
