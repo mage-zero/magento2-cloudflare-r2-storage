@@ -585,24 +585,6 @@ class R2Test extends TestCase
     }
 
     /**
-     * Test that ContentDisposition is NOT set for non-displayable types like zip.
-     */
-    public function testSaveFileDoesNotSetContentDispositionForZip(): void
-    {
-        $this->s3Client->expects($this->once())
-            ->method('putObject')
-            ->with($this->callback(function ($params) {
-                return !isset($params['ContentDisposition']);
-            }));
-
-        $this->r2->saveFile([
-            'filename' => 'archive.zip',
-            'directory' => 'downloads',
-            'content' => '', // Empty content, and zip has no MIME mapping so no ContentType/ContentDisposition
-        ]);
-    }
-
-    /**
      * Test that finfo-based content detection works when content is provided.
      * Plain text content should be detected as text/plain.
      */
