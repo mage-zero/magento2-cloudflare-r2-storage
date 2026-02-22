@@ -2,6 +2,7 @@
 namespace MageZero\CloudflareR2\Plugin\MediaStorage;
 
 use MageZero\CloudflareR2\Model\Config;
+use MageZero\CloudflareR2\Model\DownloadedFileTracker;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 use Magento\MediaStorage\Helper\File\Storage\Database;
@@ -13,14 +14,17 @@ class DatabaseHelperPlugin
 {
     private Config $config;
     private R2Factory $r2Factory;
+    private DownloadedFileTracker $downloadTracker;
     private ?R2 $r2StorageModel = null;
 
     public function __construct(
         Config $config,
-        R2Factory $r2Factory
+        R2Factory $r2Factory,
+        DownloadedFileTracker $downloadTracker
     ) {
         $this->config = $config;
         $this->r2Factory = $r2Factory;
+        $this->downloadTracker = $downloadTracker;
     }
 
     public function afterCheckDbUsage(Database $subject, $result)
@@ -47,14 +51,17 @@ class DatabaseHelperPlugin
     public function aroundSaveFileToFilesystem(Database $subject, callable $proceed, $filename)
     {
         if ($subject->checkDbUsage() && $this->config->isR2Selected()) {
-            $file = $subject->getStorageDatabaseModel()->loadByFilename(
-                $subject->getMediaRelativePath($filename)
-            );
+            $relativePath = $subject->getMediaRelativePath($filename);
+            $file = $subject->getStorageDatabaseModel()->loadByFilename($relativePath);
             if (!$file->getId()) {
                 return false;
             }
 
-            return $subject->getStorageFileModel()->saveFile($file->getData(), true);
+            $result = $subject->getStorageFileModel()->saveFile($file->getData(), true);
+            if ($result) {
+                $this->downloadTracker->track($relativePath);
+            }
+            return $result;
         }
 
         return $proceed($filename);

@@ -2,6 +2,7 @@
 namespace MageZero\CloudflareR2\Test\Unit\Plugin\MediaStorage;
 
 use MageZero\CloudflareR2\Model\Config;
+use MageZero\CloudflareR2\Model\DownloadedFileTracker;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 use MageZero\CloudflareR2\Plugin\MediaStorage\DatabaseHelperPlugin;
@@ -17,16 +18,19 @@ class DatabaseHelperPluginTest extends TestCase
 {
     private Config $config;
     private R2Factory $r2Factory;
+    private DownloadedFileTracker $downloadTracker;
     private DatabaseHelperPlugin $plugin;
 
     protected function setUp(): void
     {
         $this->config = $this->createMock(Config::class);
         $this->r2Factory = $this->createMock(R2Factory::class);
+        $this->downloadTracker = new DownloadedFileTracker();
 
         $this->plugin = new DatabaseHelperPlugin(
             $this->config,
-            $this->r2Factory
+            $this->r2Factory,
+            $this->downloadTracker
         );
     }
 
@@ -221,6 +225,8 @@ class DatabaseHelperPluginTest extends TestCase
         $result = $this->plugin->aroundSaveFileToFilesystem($subject, $proceed, '/var/www/pub/media/catalog/product/test.jpg');
 
         $this->assertTrue($result);
+        $tracked = $this->downloadTracker->getAndClear();
+        $this->assertSame(['catalog/product/test.jpg'], $tracked);
     }
 
     public function testAroundSaveFileToFilesystemReturnsFalseWhenFileNotFound(): void

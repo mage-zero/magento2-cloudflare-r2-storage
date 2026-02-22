@@ -7,9 +7,11 @@ use Magento\Framework\DataObject;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
 use Magento\Framework\Filesystem\Io\File as IoFile;
+use Magento\Framework\HTTP\ClientInterface as HttpClient;
 use Magento\MediaStorage\Helper\File\Media as MediaHelper;
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageHelper;
 use MageZero\CloudflareR2\Model\Config;
+use MageZero\CloudflareR2\Model\FileExistenceCache;
 use MageZero\CloudflareR2\Model\KeyFormatter;
 use MageZero\CloudflareR2\Model\R2ClientFactory;
 use Psr\Log\LoggerInterface;
@@ -29,6 +31,8 @@ class R2 extends DataObject
     private KeyFormatter $keyFormatter;
     private FileDriver $driver;
     private IoFile $ioFile;
+    private FileExistenceCache $fileExistenceCache;
+    private HttpClient $httpClient;
     private array $errors = [];
     private ?array $storageData = null;
 
@@ -39,7 +43,9 @@ class R2 extends DataObject
         LoggerInterface $logger,
         R2ClientFactory $clientFactory,
         FileDriver $driver,
-        ?IoFile $ioFile = null
+        ?IoFile $ioFile = null,
+        ?FileExistenceCache $fileExistenceCache = null,
+        ?HttpClient $httpClient = null
     ) {
         parent::__construct();
         $this->config = $config;
@@ -50,6 +56,10 @@ class R2 extends DataObject
         $this->keyFormatter = new KeyFormatter($this->config->getKeyPrefix());
         $this->driver = $driver;
         $this->ioFile = $ioFile ?? new IoFile();
+        $this->fileExistenceCache = $fileExistenceCache
+            ?? \Magento\Framework\App\ObjectManager::getInstance()->get(FileExistenceCache::class);
+        $this->httpClient = $httpClient
+            ?? \Magento\Framework\App\ObjectManager::getInstance()->get(HttpClient::class);
     }
 
     public function init(): self
@@ -227,6 +237,7 @@ class R2 extends DataObject
 
         try {
             $this->client->putObject($this->buildPutObjectParams($path, $file['content']));
+            $this->fileExistenceCache->set($path, true);
         } catch (AwsException $exception) {
             $this->logger->critical($exception->getMessage());
             throw new LocalizedException(__('Unable to save file "%1"', $path));
@@ -237,17 +248,102 @@ class R2 extends DataObject
 
     public function fileExists($filePath): bool
     {
-        $key = $this->keyFormatter->toKey($filePath);
+        $cached = $this->fileExistenceCache->get($filePath);
+        if ($cached !== null) {
+            return $cached;
+        }
 
+        $baseMediaUrl = $this->config->getBaseMediaUrl();
+        if ($baseMediaUrl !== '') {
+            $cdnUrl = $baseMediaUrl . '/' . ltrim($filePath, '/');
+            try {
+                $this->httpClient->setOptions(['timeout' => 5]);
+                $this->httpClient->setOption(CURLOPT_NOBODY, true);
+                $this->httpClient->get($cdnUrl);
+
+                if ($this->httpClient->getStatus() !== 200) {
+                    $this->fileExistenceCache->set($filePath, false);
+                    return false;
+                }
+
+                // For resized variants, check if original image is newer
+                if ($this->isStaleVariant($filePath, $baseMediaUrl)) {
+                    $this->fileExistenceCache->set($filePath, false);
+                    return false;
+                }
+
+                $this->fileExistenceCache->set($filePath, true);
+                return true;
+            } catch (\Exception $e) {
+                // Fall through to S3 headObject
+            }
+        }
+
+        $key = $this->keyFormatter->toKey($filePath);
         try {
             $this->client->headObject([
                 'Bucket' => $this->getBucket(),
                 'Key' => $key,
             ]);
+            $this->fileExistenceCache->set($filePath, true);
             return true;
         } catch (AwsException $exception) {
+            $this->fileExistenceCache->set($filePath, false);
             return false;
         }
+    }
+
+    private function isStaleVariant(string $filePath, string $baseMediaUrl): bool
+    {
+        $originalPath = $this->extractOriginalPath($filePath);
+        if ($originalPath === null) {
+            return false;
+        }
+
+        $variantModified = $this->getLastModifiedHeader();
+        if ($variantModified === null) {
+            return false;
+        }
+
+        try {
+            $originalUrl = $baseMediaUrl . '/' . ltrim($originalPath, '/');
+            $this->httpClient->setOptions(['timeout' => 5]);
+            $this->httpClient->setOption(CURLOPT_NOBODY, true);
+            $this->httpClient->get($originalUrl);
+
+            if ($this->httpClient->getStatus() !== 200) {
+                return false;
+            }
+
+            $originalModified = $this->getLastModifiedHeader();
+            if ($originalModified === null) {
+                return false;
+            }
+
+            return $originalModified > $variantModified;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    private function extractOriginalPath(string $cachePath): ?string
+    {
+        if (preg_match('#^(catalog/product)/cache/[^/]+/(.+)$#', $cachePath, $matches)) {
+            return $matches[1] . '/' . $matches[2];
+        }
+        return null;
+    }
+
+    private function getLastModifiedHeader(): ?int
+    {
+        $headers = $this->httpClient->getHeaders();
+        foreach ($headers as $name => $value) {
+            if (strtolower((string)$name) === 'last-modified') {
+                $timestamp = strtotime($value);
+                return $timestamp !== false ? $timestamp : null;
+            }
+        }
+        return null;
     }
 
     public function copyFile($oldFilePath, $newFilePath): bool
@@ -287,6 +383,7 @@ class R2 extends DataObject
                 'Bucket' => $this->getBucket(),
                 'Key' => $key,
             ]);
+            $this->fileExistenceCache->remove($path);
             return true;
         } catch (AwsException $exception) {
             $this->logger->critical($exception->getMessage());
