@@ -14,6 +14,7 @@ use MageZero\CloudflareR2\Model\Config;
 use MageZero\CloudflareR2\Model\FileExistenceCache;
 use MageZero\CloudflareR2\Model\KeyFormatter;
 use MageZero\CloudflareR2\Model\R2ClientFactory;
+use MageZero\CloudflareR2\Model\VariantStalenessChecker;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -33,6 +34,7 @@ class R2 extends DataObject
     private IoFile $ioFile;
     private FileExistenceCache $fileExistenceCache;
     private HttpClient $httpClient;
+    private VariantStalenessChecker $stalenessChecker;
     private array $errors = [];
     private ?array $storageData = null;
 
@@ -60,6 +62,7 @@ class R2 extends DataObject
             ?? \Magento\Framework\App\ObjectManager::getInstance()->get(FileExistenceCache::class);
         $this->httpClient = $httpClient
             ?? \Magento\Framework\App\ObjectManager::getInstance()->get(HttpClient::class);
+        $this->stalenessChecker = new VariantStalenessChecker($this->httpClient);
     }
 
     public function init(): self
@@ -267,7 +270,7 @@ class R2 extends DataObject
                 }
 
                 // For resized variants, check if original image is newer
-                if ($this->isStaleVariant($filePath, $baseMediaUrl)) {
+                if ($this->stalenessChecker->isStale($filePath, $baseMediaUrl)) {
                     $this->fileExistenceCache->set($filePath, false);
                     return false;
                 }
@@ -291,59 +294,6 @@ class R2 extends DataObject
             $this->fileExistenceCache->set($filePath, false);
             return false;
         }
-    }
-
-    private function isStaleVariant(string $filePath, string $baseMediaUrl): bool
-    {
-        $originalPath = $this->extractOriginalPath($filePath);
-        if ($originalPath === null) {
-            return false;
-        }
-
-        $variantModified = $this->getLastModifiedHeader();
-        if ($variantModified === null) {
-            return false;
-        }
-
-        try {
-            $originalUrl = $baseMediaUrl . '/' . ltrim($originalPath, '/');
-            $this->httpClient->setOptions(['timeout' => 5]);
-            $this->httpClient->setOption(CURLOPT_NOBODY, true);
-            $this->httpClient->get($originalUrl);
-
-            if ($this->httpClient->getStatus() !== 200) {
-                return false;
-            }
-
-            $originalModified = $this->getLastModifiedHeader();
-            if ($originalModified === null) {
-                return false;
-            }
-
-            return $originalModified > $variantModified;
-        } catch (\Exception $e) {
-            return false;
-        }
-    }
-
-    private function extractOriginalPath(string $cachePath): ?string
-    {
-        if (preg_match('#^(catalog/product)/cache/[^/]+/(.+)$#', $cachePath, $matches)) {
-            return $matches[1] . '/' . $matches[2];
-        }
-        return null;
-    }
-
-    private function getLastModifiedHeader(): ?int
-    {
-        $headers = $this->httpClient->getHeaders();
-        foreach ($headers as $name => $value) {
-            if (strtolower((string)$name) === 'last-modified') {
-                $timestamp = strtotime($value);
-                return $timestamp !== false ? $timestamp : null;
-            }
-        }
-        return null;
     }
 
     public function copyFile($oldFilePath, $newFilePath): bool

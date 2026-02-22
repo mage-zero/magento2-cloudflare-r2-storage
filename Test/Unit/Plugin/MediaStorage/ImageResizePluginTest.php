@@ -125,7 +125,9 @@ class ImageResizePluginTest extends TestCase
         );
 
         // Consume the generator to trigger finally block
-        foreach ($result as $_ => $__) {}
+        while ($result->valid()) {
+            $result->next();
+        }
     }
 
     public function testCleanupSkipsNonExistentFiles(): void
@@ -148,7 +150,9 @@ class ImageResizePluginTest extends TestCase
             false
         );
 
-        foreach ($result as $_ => $__) {}
+        while ($result->valid()) {
+            $result->next();
+        }
     }
 
     public function testCleanupLogsWarningOnDeleteFailure(): void
@@ -182,6 +186,8 @@ class ImageResizePluginTest extends TestCase
             false
         );
 
-        foreach ($result as $_ => $__) {}
+        while ($result->valid()) {
+            $result->next();
+        }
     }
 }
