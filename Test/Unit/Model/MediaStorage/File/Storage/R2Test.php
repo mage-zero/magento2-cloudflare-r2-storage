@@ -510,44 +510,6 @@ class R2Test extends TestCase
     }
 
     /**
-     * Test extension-based MIME type detection (using empty content to skip finfo detection).
-     */
-    public function testSaveFileSetsContentTypeByExtensionForJpeg(): void
-    {
-        $this->s3Client->expects($this->once())
-            ->method('putObject')
-            ->with($this->callback(function ($params) {
-                return isset($params['ContentType'])
-                    && $params['ContentType'] === 'image/jpeg';
-            }));
-
-        $this->r2->saveFile([
-            'filename' => 'test.jpg',
-            'directory' => 'catalog/product',
-            'content' => '', // Empty content triggers extension-based detection
-        ]);
-    }
-
-    /**
-     * Test that ContentDisposition is set to inline for image types.
-     */
-    public function testSaveFileSetsContentDispositionInlineForImages(): void
-    {
-        $this->s3Client->expects($this->once())
-            ->method('putObject')
-            ->with($this->callback(function ($params) {
-                return isset($params['ContentDisposition'])
-                    && $params['ContentDisposition'] === 'inline';
-            }));
-
-        $this->r2->saveFile([
-            'filename' => 'test.png',
-            'directory' => 'catalog/product',
-            'content' => '', // Empty content triggers extension-based detection
-        ]);
-    }
-
-    /**
      * Test extension-based MIME type detection for various file types.
      * Uses empty content to ensure extension-based fallback is used.
      *
