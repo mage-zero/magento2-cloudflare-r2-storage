@@ -253,6 +253,30 @@ class DatabaseHelperPluginTest extends TestCase
         $this->assertFalse($result);
     }
 
+    public function testAroundSaveFileToFilesystemDoesNotTrackWhenFileNotFoundInR2(): void
+    {
+        $r2Model = $this->getMockBuilder(R2::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['getId'])
+            ->onlyMethods(['loadByFilename'])
+            ->getMock();
+        $r2Model->method('loadByFilename')->willReturnSelf();
+        $r2Model->method('getId')->willReturn(null);
+
+        $subject = $this->createMock(Database::class);
+        $subject->method('checkDbUsage')->willReturn(true);
+        $subject->method('getStorageDatabaseModel')->willReturn($r2Model);
+        $subject->method('getMediaRelativePath')->willReturn('catalog/product/missing.jpg');
+
+        $this->config->method('isR2Selected')->willReturn(true);
+
+        $proceed = fn() => $this->fail('Proceed should not be called');
+
+        $this->plugin->aroundSaveFileToFilesystem($subject, $proceed, '/var/www/pub/media/catalog/product/missing.jpg');
+
+        $this->assertSame([], $this->downloadTracker->getAndClear());
+    }
+
     public function testAroundSaveFileToFilesystemCallsProceedWhenR2NotSelected(): void
     {
         $subject = $this->createMock(Database::class);

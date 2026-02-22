@@ -155,6 +155,30 @@ class ImageResizePluginTest extends TestCase
         }
     }
 
+    public function testCleanupDoesNotDeleteLocalFilesWhenNoneWereDownloaded(): void
+    {
+        $this->config->method('isR2Selected')->willReturn(true);
+
+        // Tracker is empty — no files were downloaded from R2
+        $this->mediaDirectory->expects($this->never())->method('isFile');
+        $this->mediaDirectory->expects($this->never())->method('delete');
+
+        $generator = (function () {
+            yield ['filename' => 'image.jpg', 'error' => ''] => 1;
+        })();
+
+        $result = $this->plugin->aroundResizeFromThemes(
+            $this->createMock(ImageResize::class),
+            fn() => $generator,
+            null,
+            false
+        );
+
+        while ($result->valid()) {
+            $result->next();
+        }
+    }
+
     public function testCleanupLogsWarningOnDeleteFailure(): void
     {
         $this->config->method('isR2Selected')->willReturn(true);
