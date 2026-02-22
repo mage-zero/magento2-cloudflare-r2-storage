@@ -595,6 +595,10 @@ class R2 extends DataObject
                     'Quiet' => true,
                 ],
             ]);
+
+            foreach ($chunk as $key) {
+                $this->fileExistenceCache->remove($key);
+            }
         }
     }
 }
