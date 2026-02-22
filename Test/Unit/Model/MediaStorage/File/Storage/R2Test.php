@@ -5,7 +5,6 @@ use Aws\CommandInterface;
 use Aws\Exception\AwsException;
 use Aws\S3\S3Client;
 use MageZero\CloudflareR2\Model\Config;
-use MageZero\CloudflareR2\Model\FileExistenceCache;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
 use MageZero\CloudflareR2\Model\R2ClientFactory;
 use Magento\Framework\Filesystem\Driver\File as FileDriver;
@@ -19,13 +18,11 @@ use Psr\Log\LoggerInterface;
 /**
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  * @SuppressWarnings(PHPMD.TooManyPublicMethods)
- * @SuppressWarnings(PHPMD.ExcessivePublicCount)
  */
 class R2Test extends TestCase
 {
     private S3Client $s3Client;
     private Config $config;
-    private FileExistenceCache $fileExistenceCache;
     private HttpClient $httpClient;
     private R2 $r2;
 
@@ -63,7 +60,6 @@ class R2Test extends TestCase
             ];
         });
 
-        $this->fileExistenceCache = $this->createMock(FileExistenceCache::class);
         $this->httpClient = $this->createMock(HttpClient::class);
 
         $this->r2 = new R2(
@@ -74,7 +70,6 @@ class R2Test extends TestCase
             $clientFactory,
             $driver,
             $ioFile,
-            $this->fileExistenceCache,
             $this->httpClient
         );
     }
@@ -89,113 +84,50 @@ class R2Test extends TestCase
         $this->assertFalse($this->r2->hasErrors());
     }
 
-    public function testFileExistsReturnsCachedTrue(): void
-    {
-        $this->fileExistenceCache->method('get')->willReturn(true);
-        $this->s3Client->expects($this->never())->method('headObject');
-        $this->httpClient->expects($this->never())->method('get');
-
-        $this->assertTrue($this->r2->fileExists('catalog/product/test.jpg'));
-    }
-
-    public function testFileExistsReturnsCachedFalse(): void
-    {
-        $this->fileExistenceCache->method('get')->willReturn(false);
-        $this->s3Client->expects($this->never())->method('headObject');
-
-        $this->assertFalse($this->r2->fileExists('catalog/product/missing.jpg'));
-    }
-
     public function testFileExistsFallsBackToS3WhenNoCdnUrl(): void
     {
-        $this->fileExistenceCache->method('get')->willReturn(null);
         $this->s3Client->method('headObject')->willReturn([]);
-        $this->fileExistenceCache->expects($this->once())->method('set')->with('catalog/product/test.jpg', true);
 
         $this->assertTrue($this->r2->fileExists('catalog/product/test.jpg'));
     }
 
     public function testFileExistsS3FallbackReturnsFalseOnException(): void
     {
-        $this->fileExistenceCache->method('get')->willReturn(null);
         $command = $this->createMock(CommandInterface::class);
         $this->s3Client->method('headObject')
             ->willThrowException(new AwsException('Not found', $command));
-        $this->fileExistenceCache->expects($this->once())->method('set')->with('catalog/product/missing.jpg', false);
 
         $this->assertFalse($this->r2->fileExists('catalog/product/missing.jpg'));
     }
 
     public function testFileExistsUsesCdnHeadWhenUrlConfigured(): void
     {
-        $this->config = $this->createMock(Config::class);
-        $this->config->method('getBucket')->willReturn('test-bucket');
-        $this->config->method('getKeyPrefix')->willReturn('');
-        $this->config->method('getBaseMediaUrl')->willReturn('https://media.example.com');
+        $httpClient = $this->createMock(HttpClient::class);
+        $r2 = $this->createR2WithCdnUrl($httpClient);
 
-        $clientFactory = $this->createMock(R2ClientFactory::class);
-        $clientFactory->method('create')->willReturn($this->s3Client);
-
-        $r2 = new R2(
-            $this->config,
-            $this->createMock(MediaHelper::class),
-            $this->createStub(StorageHelper::class),
-            $this->createMock(LoggerInterface::class),
-            $clientFactory,
-            $this->createMock(FileDriver::class),
-            $this->createMock(IoFile::class),
-            $this->fileExistenceCache,
-            $this->httpClient
-        );
-
-        $this->fileExistenceCache->method('get')->willReturn(null);
-        $this->httpClient->expects($this->once())->method('get')
+        $httpClient->expects($this->once())->method('get')
             ->with('https://media.example.com/catalog/product/test.jpg');
-        $this->httpClient->method('getStatus')->willReturn(200);
+        $httpClient->method('getStatus')->willReturn(200);
         $this->s3Client->expects($this->never())->method('headObject');
-        $this->fileExistenceCache->expects($this->once())->method('set')->with('catalog/product/test.jpg', true);
 
         $this->assertTrue($r2->fileExists('catalog/product/test.jpg'));
     }
 
     public function testFileExistsCdnHead404ReturnsFalse(): void
     {
-        $this->config = $this->createMock(Config::class);
-        $this->config->method('getBucket')->willReturn('test-bucket');
-        $this->config->method('getKeyPrefix')->willReturn('');
-        $this->config->method('getBaseMediaUrl')->willReturn('https://media.example.com');
+        $httpClient = $this->createMock(HttpClient::class);
+        $r2 = $this->createR2WithCdnUrl($httpClient);
 
-        $clientFactory = $this->createMock(R2ClientFactory::class);
-        $clientFactory->method('create')->willReturn($this->s3Client);
-
-        $r2 = new R2(
-            $this->config,
-            $this->createMock(MediaHelper::class),
-            $this->createStub(StorageHelper::class),
-            $this->createMock(LoggerInterface::class),
-            $clientFactory,
-            $this->createMock(FileDriver::class),
-            $this->createMock(IoFile::class),
-            $this->fileExistenceCache,
-            $this->httpClient
-        );
-
-        $this->fileExistenceCache->method('get')->willReturn(null);
-        $this->httpClient->method('getStatus')->willReturn(404);
+        $httpClient->method('getStatus')->willReturn(404);
         $this->s3Client->expects($this->never())->method('headObject');
-        $this->fileExistenceCache->expects($this->once())->method('set')->with('catalog/product/missing.jpg', false);
 
         $this->assertFalse($r2->fileExists('catalog/product/missing.jpg'));
     }
 
     public function testFileExistsDetectsStaleVariant(): void
     {
-        $fileExistenceCache = $this->createMock(FileExistenceCache::class);
         $httpClient = $this->createMock(HttpClient::class);
-
-        $r2 = $this->createR2WithCdnUrl($fileExistenceCache, $httpClient);
-
-        $fileExistenceCache->method('get')->willReturn(null);
+        $r2 = $this->createR2WithCdnUrl($httpClient);
 
         // Two HEAD requests: variant then original
         $httpClient->expects($this->exactly(2))->method('get');
@@ -205,10 +137,6 @@ class R2Test extends TestCase
             ['Last-Modified' => 'Sun, 01 Jun 2025 00:00:00 GMT']
         );
 
-        // Stale → cached as false
-        $fileExistenceCache->expects($this->once())->method('set')
-            ->with('catalog/product/cache/abc123/a/b/image.jpg', false);
-
         $this->assertFalse(
             $r2->fileExists('catalog/product/cache/abc123/a/b/image.jpg')
         );
@@ -216,12 +144,8 @@ class R2Test extends TestCase
 
     public function testFileExistsReturnsTrueForFreshVariant(): void
     {
-        $fileExistenceCache = $this->createMock(FileExistenceCache::class);
         $httpClient = $this->createMock(HttpClient::class);
-
-        $r2 = $this->createR2WithCdnUrl($fileExistenceCache, $httpClient);
-
-        $fileExistenceCache->method('get')->willReturn(null);
+        $r2 = $this->createR2WithCdnUrl($httpClient);
 
         $httpClient->expects($this->exactly(2))->method('get');
         $httpClient->method('getStatus')->willReturn(200);
@@ -230,10 +154,6 @@ class R2Test extends TestCase
             ['Last-Modified' => 'Sat, 01 Jan 2025 00:00:00 GMT']
         );
 
-        // Fresh → cached as true
-        $fileExistenceCache->expects($this->once())->method('set')
-            ->with('catalog/product/cache/abc123/a/b/image.jpg', true);
-
         $this->assertTrue(
             $r2->fileExists('catalog/product/cache/abc123/a/b/image.jpg')
         );
@@ -241,19 +161,12 @@ class R2Test extends TestCase
 
     public function testFileExistsSkipsStalenessCheckForNonCachePath(): void
     {
-        $fileExistenceCache = $this->createMock(FileExistenceCache::class);
         $httpClient = $this->createMock(HttpClient::class);
-
-        $r2 = $this->createR2WithCdnUrl($fileExistenceCache, $httpClient);
-
-        $fileExistenceCache->method('get')->willReturn(null);
+        $r2 = $this->createR2WithCdnUrl($httpClient);
 
         // Only one HEAD request — no staleness check for non-cache paths
         $httpClient->expects($this->once())->method('get');
         $httpClient->method('getStatus')->willReturn(200);
-
-        $fileExistenceCache->expects($this->once())->method('set')
-            ->with('catalog/product/a/b/image.jpg', true);
 
         $this->assertTrue(
             $r2->fileExists('catalog/product/a/b/image.jpg')
@@ -262,12 +175,8 @@ class R2Test extends TestCase
 
     public function testFileExistsTreatsMissingOriginalAsFresh(): void
     {
-        $fileExistenceCache = $this->createMock(FileExistenceCache::class);
         $httpClient = $this->createMock(HttpClient::class);
-
-        $r2 = $this->createR2WithCdnUrl($fileExistenceCache, $httpClient);
-
-        $fileExistenceCache->method('get')->willReturn(null);
+        $r2 = $this->createR2WithCdnUrl($httpClient);
 
         $httpClient->expects($this->exactly(2))->method('get');
         // Variant exists, original returns 404
@@ -276,19 +185,13 @@ class R2Test extends TestCase
             ['Last-Modified' => 'Sat, 01 Jan 2025 00:00:00 GMT']
         );
 
-        // Can't verify staleness → treat as fresh
-        $fileExistenceCache->expects($this->once())->method('set')
-            ->with('catalog/product/cache/abc123/a/b/image.jpg', true);
-
         $this->assertTrue(
             $r2->fileExists('catalog/product/cache/abc123/a/b/image.jpg')
         );
     }
 
-    private function createR2WithCdnUrl(
-        FileExistenceCache $fileExistenceCache,
-        HttpClient $httpClient
-    ): R2 {
+    private function createR2WithCdnUrl(HttpClient $httpClient): R2
+    {
         $config = $this->createMock(Config::class);
         $config->method('getBucket')->willReturn('test-bucket');
         $config->method('getKeyPrefix')->willReturn('');
@@ -305,7 +208,6 @@ class R2Test extends TestCase
             $clientFactory,
             $this->createMock(FileDriver::class),
             $this->createMock(IoFile::class),
-            $fileExistenceCache,
             $httpClient
         );
     }
@@ -331,7 +233,6 @@ class R2Test extends TestCase
 
     public function testSaveFileSkipsWhenExistsAndNoOverwrite(): void
     {
-        $this->fileExistenceCache->method('get')->willReturn(null);
         $this->s3Client->method('headObject')->willReturn([]);
         $this->s3Client->expects($this->never())->method('putObject');
 

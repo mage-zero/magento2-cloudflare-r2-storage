@@ -11,7 +11,6 @@ use Magento\Framework\HTTP\ClientInterface as HttpClient;
 use Magento\MediaStorage\Helper\File\Media as MediaHelper;
 use Magento\MediaStorage\Helper\File\Storage\Database as StorageHelper;
 use MageZero\CloudflareR2\Model\Config;
-use MageZero\CloudflareR2\Model\FileExistenceCache;
 use MageZero\CloudflareR2\Model\KeyFormatter;
 use MageZero\CloudflareR2\Model\R2ClientFactory;
 use MageZero\CloudflareR2\Model\VariantStalenessChecker;
@@ -32,7 +31,6 @@ class R2 extends DataObject
     private KeyFormatter $keyFormatter;
     private FileDriver $driver;
     private IoFile $ioFile;
-    private FileExistenceCache $fileExistenceCache;
     private HttpClient $httpClient;
     private VariantStalenessChecker $stalenessChecker;
     private array $errors = [];
@@ -46,7 +44,6 @@ class R2 extends DataObject
         R2ClientFactory $clientFactory,
         FileDriver $driver,
         ?IoFile $ioFile = null,
-        ?FileExistenceCache $fileExistenceCache = null,
         ?HttpClient $httpClient = null
     ) {
         parent::__construct();
@@ -58,8 +55,6 @@ class R2 extends DataObject
         $this->keyFormatter = new KeyFormatter($this->config->getKeyPrefix());
         $this->driver = $driver;
         $this->ioFile = $ioFile ?? new IoFile();
-        $this->fileExistenceCache = $fileExistenceCache
-            ?? \Magento\Framework\App\ObjectManager::getInstance()->get(FileExistenceCache::class);
         $this->httpClient = $httpClient
             ?? \Magento\Framework\App\ObjectManager::getInstance()->get(HttpClient::class);
         $this->stalenessChecker = new VariantStalenessChecker($this->httpClient);
@@ -240,7 +235,6 @@ class R2 extends DataObject
 
         try {
             $this->client->putObject($this->buildPutObjectParams($path, $file['content']));
-            $this->fileExistenceCache->set($path, true);
         } catch (AwsException $exception) {
             $this->logger->critical($exception->getMessage());
             throw new LocalizedException(__('Unable to save file "%1"', $path));
@@ -251,11 +245,6 @@ class R2 extends DataObject
 
     public function fileExists($filePath): bool
     {
-        $cached = $this->fileExistenceCache->get($filePath);
-        if ($cached !== null) {
-            return $cached;
-        }
-
         $baseMediaUrl = $this->config->getBaseMediaUrl();
         if ($baseMediaUrl !== '') {
             $cdnUrl = $baseMediaUrl . '/' . ltrim($filePath, '/');
@@ -265,17 +254,14 @@ class R2 extends DataObject
                 $this->httpClient->get($cdnUrl);
 
                 if ($this->httpClient->getStatus() !== 200) {
-                    $this->fileExistenceCache->set($filePath, false);
                     return false;
                 }
 
                 // For resized variants, check if original image is newer
                 if ($this->stalenessChecker->isStale($filePath, $baseMediaUrl)) {
-                    $this->fileExistenceCache->set($filePath, false);
                     return false;
                 }
 
-                $this->fileExistenceCache->set($filePath, true);
                 return true;
             } catch (\Exception $e) {
                 // Fall through to S3 headObject
@@ -288,10 +274,8 @@ class R2 extends DataObject
                 'Bucket' => $this->getBucket(),
                 'Key' => $key,
             ]);
-            $this->fileExistenceCache->set($filePath, true);
             return true;
         } catch (AwsException $exception) {
-            $this->fileExistenceCache->set($filePath, false);
             return false;
         }
     }
@@ -333,7 +317,6 @@ class R2 extends DataObject
                 'Bucket' => $this->getBucket(),
                 'Key' => $key,
             ]);
-            $this->fileExistenceCache->remove($path);
             return true;
         } catch (AwsException $exception) {
             $this->logger->critical($exception->getMessage());
@@ -596,9 +579,6 @@ class R2 extends DataObject
                 ],
             ]);
 
-            foreach ($chunk as $key) {
-                $this->fileExistenceCache->remove($key);
-            }
         }
     }
 }
