@@ -26,7 +26,7 @@ class VariantStalenessChecker
 
         try {
             $originalUrl = $baseMediaUrl . '/' . ltrim($originalPath, '/');
-            $this->httpClient->setOptions(['timeout' => 5]);
+            $this->httpClient->setTimeout(5);
             $this->httpClient->setOption(CURLOPT_NOBODY, true);
             $this->httpClient->get($originalUrl);
 

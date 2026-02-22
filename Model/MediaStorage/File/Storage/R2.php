@@ -249,7 +249,7 @@ class R2 extends DataObject
         if ($baseMediaUrl !== '') {
             $cdnUrl = $baseMediaUrl . '/' . ltrim($filePath, '/');
             try {
-                $this->httpClient->setOptions(['timeout' => 5]);
+                $this->httpClient->setTimeout(5);
                 $this->httpClient->setOption(CURLOPT_NOBODY, true);
                 $this->httpClient->get($cdnUrl);
 
