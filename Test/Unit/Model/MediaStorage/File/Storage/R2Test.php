@@ -19,6 +19,7 @@ use Psr\Log\LoggerInterface;
 /**
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  * @SuppressWarnings(PHPMD.TooManyPublicMethods)
+ * @SuppressWarnings(PHPMD.ExcessivePublicCount)
  */
 class R2Test extends TestCase
 {
