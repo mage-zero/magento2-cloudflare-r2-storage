@@ -18,6 +18,7 @@ use Psr\Log\LoggerInterface;
 /**
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  * @SuppressWarnings(PHPMD.TooManyPublicMethods)
+ * @SuppressWarnings(PHPMD.ExcessivePublicCount)
  */
 class R2Test extends TestCase
 {
@@ -509,6 +510,38 @@ class R2Test extends TestCase
         $this->assertSame($this->r2, $result);
     }
 
+    public function testSaveFileSetsContentTypeByExtensionForJpeg(): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) {
+                return isset($params['ContentType'])
+                    && $params['ContentType'] === 'image/jpeg';
+            }));
+
+        $this->r2->saveFile([
+            'filename' => 'test.jpg',
+            'directory' => 'catalog/product',
+            'content' => '',
+        ]);
+    }
+
+    public function testSaveFileSetsContentDispositionInlineForImages(): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) {
+                return isset($params['ContentDisposition'])
+                    && $params['ContentDisposition'] === 'inline';
+            }));
+
+        $this->r2->saveFile([
+            'filename' => 'test.png',
+            'directory' => 'catalog/product',
+            'content' => '',
+        ]);
+    }
+
     /**
      * Test extension-based MIME type detection for various file types.
      * Uses empty content to ensure extension-based fallback is used.
@@ -582,6 +615,21 @@ class R2Test extends TestCase
             'mp4' => ['video.mp4'],
             'mp3' => ['audio.mp3'],
         ];
+    }
+
+    public function testSaveFileDoesNotSetContentDispositionForZip(): void
+    {
+        $this->s3Client->expects($this->once())
+            ->method('putObject')
+            ->with($this->callback(function ($params) {
+                return !isset($params['ContentDisposition']);
+            }));
+
+        $this->r2->saveFile([
+            'filename' => 'archive.zip',
+            'directory' => 'downloads',
+            'content' => '',
+        ]);
     }
 
     /**
