@@ -10,6 +10,7 @@ use Magento\MediaStorage\Helper\File\Storage\Database;
 use Magento\MediaStorage\Model\File\Storage\Database as DatabaseStorage;
 use Magento\MediaStorage\Model\File\Storage\File as FileStorage;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 
 /**
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
@@ -19,6 +20,7 @@ class DatabaseHelperPluginTest extends TestCase
     private Config $config;
     private R2Factory $r2Factory;
     private DownloadedFileTracker $downloadTracker;
+    private LoggerInterface $logger;
     private DatabaseHelperPlugin $plugin;
 
     protected function setUp(): void
@@ -26,11 +28,13 @@ class DatabaseHelperPluginTest extends TestCase
         $this->config = $this->createMock(Config::class);
         $this->r2Factory = $this->createMock(R2Factory::class);
         $this->downloadTracker = new DownloadedFileTracker();
+        $this->logger = $this->createMock(LoggerInterface::class);
 
         $this->plugin = new DatabaseHelperPlugin(
             $this->config,
             $this->r2Factory,
-            $this->downloadTracker
+            $this->downloadTracker,
+            $this->logger
         );
     }
 
@@ -274,6 +278,54 @@ class DatabaseHelperPluginTest extends TestCase
 
         $this->plugin->aroundSaveFileToFilesystem($subject, $proceed, '/var/www/pub/media/catalog/product/missing.jpg');
 
+        $this->assertSame([], $this->downloadTracker->getAndClear());
+    }
+
+    public function testAroundSaveFileToFilesystemReturnsFalseAndLogsOnSaveError(): void
+    {
+        $r2Model = $this->getMockBuilder(R2::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['getId'])
+            ->onlyMethods(['loadByFilename', 'getData'])
+            ->getMock();
+        $r2Model->method('loadByFilename')->willReturnSelf();
+        $r2Model->method('getId')->willReturn('test-id');
+        $r2Model->method('getData')->willReturn([
+            'filename' => 'test.jpg',
+            'content' => 'file-content',
+        ]);
+
+        $fileModel = $this->createMock(FileStorage::class);
+        $fileModel->method('saveFile')
+            ->willThrowException(new \Magento\Framework\Exception\LocalizedException(
+                new \Magento\Framework\Phrase('Unable to save file: catalog/product/test.jpg')
+            ));
+
+        $subject = $this->createMock(Database::class);
+        $subject->method('checkDbUsage')->willReturn(true);
+        $subject->method('getStorageDatabaseModel')->willReturn($r2Model);
+        $subject->method('getMediaRelativePath')->willReturn('catalog/product/test.jpg');
+        $subject->method('getStorageFileModel')->willReturn($fileModel);
+
+        $this->config->method('isR2Selected')->willReturn(true);
+
+        $this->logger->expects($this->once())
+            ->method('error')
+            ->with(
+                'R2: failed to save file to local filesystem',
+                $this->callback(fn($ctx) => $ctx['path'] === 'catalog/product/test.jpg')
+            );
+
+        $proceed = fn() => $this->fail('Proceed should not be called');
+
+        $result = $this->plugin->aroundSaveFileToFilesystem(
+            $subject,
+            $proceed,
+            '/var/www/pub/media/catalog/product/test.jpg'
+        );
+
+        $this->assertFalse($result);
+        // Should NOT have tracked the file since save failed
         $this->assertSame([], $this->downloadTracker->getAndClear());
     }
 

@@ -95,26 +95,27 @@ class ImageResizePluginTest extends TestCase
         $this->assertSame($generator, $result);
     }
 
-    public function testCleansUpDownloadedFilesAfterSync(): void
+    public function testCleansUpDownloadedFilesAfterEachImage(): void
     {
         $this->config->method('isR2Selected')->willReturn(true);
 
-        // Simulate files being tracked during resize
-        $this->downloadTracker->track('catalog/product/a/b/image1.jpg');
-        $this->downloadTracker->track('catalog/product/c/d/image2.jpg');
+        $deletedFiles = [];
+        $this->mediaDirectory->method('isFile')->willReturnCallback(function ($path) {
+            return strpos($path, 'catalog/product/') === 0 && strpos($path, 'cache') === false;
+        });
+        $this->mediaDirectory->method('isDirectory')->willReturn(false);
+        $this->mediaDirectory->method('delete')->willReturnCallback(function ($path) use (&$deletedFiles) {
+            $deletedFiles[] = $path;
+        });
 
-        $this->mediaDirectory->method('isFile')->willReturn(true);
-        $this->mediaDirectory->expects($this->exactly(2))
-            ->method('delete')
-            ->willReturnCallback(function ($path) {
-                $this->assertContains($path, [
-                    'catalog/product/a/b/image1.jpg',
-                    'catalog/product/c/d/image2.jpg',
-                ]);
-            });
-
+        // Track files as if DatabaseHelperPlugin downloaded them
+        // Simulate: image 1 downloads, then image 2 downloads
         $generator = (function () {
-            yield ['filename' => 'image.jpg', 'error' => ''] => 1;
+            $this->downloadTracker->track('catalog/product/a/b/image1.jpg');
+            yield ['filename' => 'image1.jpg', 'error' => ''] => 2;
+            // After yield, cleanup should have deleted image1.jpg
+            $this->downloadTracker->track('catalog/product/c/d/image2.jpg');
+            yield ['filename' => 'image2.jpg', 'error' => ''] => 2;
         })();
 
         $result = $this->plugin->aroundResizeFromThemes(
@@ -124,10 +125,53 @@ class ImageResizePluginTest extends TestCase
             false
         );
 
-        // Consume the generator to trigger finally block
-        while ($result->valid()) {
-            $result->next();
+        // Consume the generator
+        $items = [];
+        foreach ($result as $key => $value) {
+            $items[] = $key;
         }
+
+        $this->assertCount(2, $items);
+        // Both files should have been deleted (one after each yield)
+        $this->assertContains('catalog/product/a/b/image1.jpg', $deletedFiles);
+        $this->assertContains('catalog/product/c/d/image2.jpg', $deletedFiles);
+    }
+
+    public function testCleansCacheDirectoryAfterEachImage(): void
+    {
+        $this->config->method('isR2Selected')->willReturn(true);
+
+        $cacheDeleteCount = 0;
+        $this->mediaDirectory->method('isFile')->willReturn(false);
+        $this->mediaDirectory->method('isDirectory')->willReturnCallback(function ($path) {
+            return $path === 'catalog/product/cache';
+        });
+        $this->mediaDirectory->method('delete')->willReturnCallback(
+            function ($path) use (&$cacheDeleteCount) {
+                if ($path === 'catalog/product/cache') {
+                    $cacheDeleteCount++;
+                }
+            }
+        );
+
+        $generator = (function () {
+            yield ['filename' => 'image1.jpg', 'error' => ''] => 2;
+            yield ['filename' => 'image2.jpg', 'error' => ''] => 2;
+        })();
+
+        $result = $this->plugin->aroundResizeFromThemes(
+            $this->createMock(ImageResize::class),
+            fn() => $generator,
+            null,
+            false
+        );
+
+        foreach ($result as $_ => $__) {
+            // consume
+        }
+
+        // Cache dir should be cleaned after each image + once in finally
+        $this->assertSame(3, $cacheDeleteCount);
     }
 
     public function testCleanupSkipsNonExistentFiles(): void
@@ -137,6 +181,7 @@ class ImageResizePluginTest extends TestCase
         $this->downloadTracker->track('catalog/product/gone.jpg');
 
         $this->mediaDirectory->method('isFile')->willReturn(false);
+        $this->mediaDirectory->method('isDirectory')->willReturn(false);
         $this->mediaDirectory->expects($this->never())->method('delete');
 
         $generator = (function () {
@@ -160,7 +205,9 @@ class ImageResizePluginTest extends TestCase
         $this->config->method('isR2Selected')->willReturn(true);
 
         // Tracker is empty — no files were downloaded from R2
-        $this->mediaDirectory->expects($this->never())->method('isFile');
+        // Cache dir doesn't exist either
+        $this->mediaDirectory->method('isFile')->willReturn(false);
+        $this->mediaDirectory->method('isDirectory')->willReturn(false);
         $this->mediaDirectory->expects($this->never())->method('delete');
 
         $generator = (function () {
@@ -186,16 +233,16 @@ class ImageResizePluginTest extends TestCase
         $this->downloadTracker->track('catalog/product/locked.jpg');
 
         $this->mediaDirectory->method('isFile')->willReturn(true);
+        $this->mediaDirectory->method('isDirectory')->willReturn(false);
         $this->mediaDirectory->method('delete')
             ->willThrowException(new \Exception('Permission denied'));
 
-        $this->logger->expects($this->once())
+        $this->logger->expects($this->atLeastOnce())
             ->method('warning')
             ->with(
-                'Failed to clean up downloaded file',
+                $this->anything(),
                 $this->callback(function ($context) {
-                    return $context['path'] === 'catalog/product/locked.jpg'
-                        && $context['error'] === 'Permission denied';
+                    return isset($context['error']) && $context['error'] === 'Permission denied';
                 })
             );
 

@@ -6,6 +6,7 @@ use MageZero\CloudflareR2\Model\DownloadedFileTracker;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2;
 use MageZero\CloudflareR2\Model\MediaStorage\File\Storage\R2Factory;
 use Magento\MediaStorage\Helper\File\Storage\Database;
+use Psr\Log\LoggerInterface;
 
 /**
  * @SuppressWarnings(PHPMD.UnusedFormalParameter)
@@ -15,16 +16,19 @@ class DatabaseHelperPlugin
     private Config $config;
     private R2Factory $r2Factory;
     private DownloadedFileTracker $downloadTracker;
+    private LoggerInterface $logger;
     private ?R2 $r2StorageModel = null;
 
     public function __construct(
         Config $config,
         R2Factory $r2Factory,
-        DownloadedFileTracker $downloadTracker
+        DownloadedFileTracker $downloadTracker,
+        LoggerInterface $logger
     ) {
         $this->config = $config;
         $this->r2Factory = $r2Factory;
         $this->downloadTracker = $downloadTracker;
+        $this->logger = $logger;
     }
 
     public function afterCheckDbUsage(Database $subject, $result)
@@ -57,7 +61,18 @@ class DatabaseHelperPlugin
                 return false;
             }
 
-            $result = $subject->getStorageFileModel()->saveFile($file->getData(), true);
+            try {
+                $result = $subject->getStorageFileModel()->saveFile($file->getData(), true);
+            } catch (\Exception $e) {
+                // Log and return false so callers (e.g. catalog:images:resize)
+                // skip this image rather than aborting the entire batch.
+                $this->logger->error('R2: failed to save file to local filesystem', [
+                    'path' => $relativePath,
+                    'error' => $e->getMessage(),
+                ]);
+                return false;
+            }
+
             if ($result) {
                 $this->downloadTracker->track($relativePath);
             }

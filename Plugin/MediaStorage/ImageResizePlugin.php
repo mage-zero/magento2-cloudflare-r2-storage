@@ -14,6 +14,8 @@ use Psr\Log\LoggerInterface;
  */
 class ImageResizePlugin
 {
+    private const CACHE_PATH = 'catalog/product/cache';
+
     private Config $config;
     private ImageCacheSynchronizer $cacheSynchronizer;
     private DownloadedFileTracker $downloadTracker;
@@ -45,14 +47,23 @@ class ImageResizePlugin
             return $generator;
         }
 
-        // In read-only mode, images are generated in /tmp and uploaded directly
-        // The sync() call is a no-op in read-only mode
+        // Iterate manually so we can clean up after each image.
+        // Each yield corresponds to one product image whose originals have
+        // been downloaded from R2 and whose resized variants have already
+        // been uploaded back to R2 by Magento's generateResizedImage().
+        // Without per-image cleanup, originals and cache variants accumulate
+        // on the (small) tmpfs media mount and eventually fill it.
         return (function () use ($generator) {
             try {
-                yield from $generator;
+                foreach ($generator as $key => $value) {
+                    yield $key => $value;
+                    $this->cleanupDownloadedFiles();
+                    $this->cleanupCacheFiles();
+                }
             } finally {
                 $this->cacheSynchronizer->sync();
                 $this->cleanupDownloadedFiles();
+                $this->cleanupCacheFiles();
             }
         })();
     }
@@ -71,6 +82,27 @@ class ImageResizePlugin
                     'error' => $e->getMessage()
                 ]);
             }
+        }
+    }
+
+    /**
+     * Delete locally generated cache variants that have already been uploaded to R2.
+     *
+     * Magento's generateResizedImage() uploads each variant via Database::saveFile()
+     * immediately after creating it, so the local copies under catalog/product/cache/
+     * are safe to remove.
+     */
+    private function cleanupCacheFiles(): void
+    {
+        try {
+            if ($this->mediaDirectory->isDirectory(self::CACHE_PATH)) {
+                $this->mediaDirectory->delete(self::CACHE_PATH);
+            }
+        } catch (\Exception $e) {
+            $this->logger->warning('Failed to clean up image cache directory', [
+                'path' => self::CACHE_PATH,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 }
