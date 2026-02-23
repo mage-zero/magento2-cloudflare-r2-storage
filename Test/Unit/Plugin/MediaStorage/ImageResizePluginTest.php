@@ -167,7 +167,7 @@ class ImageResizePluginTest extends TestCase
             false
         );
 
-        iterator_to_array($result);
+        iterator_to_array($result, false);
 
         // Cache dir should be cleaned after each image + once in finally
         $this->assertSame(3, $cacheDeleteCount);
