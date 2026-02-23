@@ -19,6 +19,7 @@ use Psr\Log\LoggerInterface;
 /**
  * @SuppressWarnings(PHPMD.UnusedFormalParameter)
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
+ * @SuppressWarnings(PHPMD.ExcessiveClassComplexity)
  */
 class R2 extends DataObject
 {
@@ -248,6 +249,9 @@ class R2 extends DataObject
         return true;
     }
 
+    /**
+     * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+     */
     public function fileExists($filePath): bool
     {
         $filePath = ltrim((string)$filePath, '/');
