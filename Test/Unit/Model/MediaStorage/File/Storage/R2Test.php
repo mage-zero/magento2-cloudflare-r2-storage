@@ -45,10 +45,6 @@ class R2Test extends TestCase
             ->disableOriginalConstructor()
             ->addMethods(['headObject', 'putObject', 'getObject', 'deleteObject', 'copyObject', 'listObjectsV2', 'deleteObjects'])
             ->getMock();
-        $this->s3Client->method('listObjectsV2')->willReturn([
-            'Contents' => [],
-            'IsTruncated' => false,
-        ]);
         $clientFactory = $this->createMock(R2ClientFactory::class);
         $clientFactory->method('create')->willReturn($this->s3Client);
 
