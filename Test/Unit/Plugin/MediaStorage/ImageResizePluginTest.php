@@ -127,8 +127,9 @@ class ImageResizePluginTest extends TestCase
 
         // Consume the generator
         $items = [];
-        foreach ($result as $key => $value) {
+        foreach ($result as $key => $count) {
             $items[] = $key;
+            $this->assertSame(2, $count);
         }
 
         $this->assertCount(2, $items);
@@ -166,9 +167,7 @@ class ImageResizePluginTest extends TestCase
             false
         );
 
-        foreach ($result as $_ => $__) {
-            // consume
-        }
+        iterator_to_array($result);
 
         // Cache dir should be cleaned after each image + once in finally
         $this->assertSame(3, $cacheDeleteCount);
