@@ -45,6 +45,10 @@ class R2Test extends TestCase
             ->disableOriginalConstructor()
             ->addMethods(['headObject', 'putObject', 'getObject', 'deleteObject', 'copyObject', 'listObjectsV2', 'deleteObjects'])
             ->getMock();
+        $this->s3Client->method('listObjectsV2')->willReturn([
+            'Contents' => [],
+            'IsTruncated' => false,
+        ]);
         $clientFactory = $this->createMock(R2ClientFactory::class);
         $clientFactory->method('create')->willReturn($this->s3Client);
 
@@ -130,11 +134,22 @@ class R2Test extends TestCase
         $httpClient = $this->createMock(HttpClient::class);
         $r2 = $this->createR2WithCdnUrl($httpClient);
 
-        // Two HEAD requests: variant then original
-        $httpClient->expects($this->exactly(2))->method('get');
+        $this->s3Client->expects($this->once())
+            ->method('listObjectsV2')
+            ->willReturn([
+                'Contents' => [
+                    [
+                        'Key' => 'catalog/product/cache/abc123/a/b/image.jpg',
+                        'LastModified' => new \DateTimeImmutable('Sat, 01 Jan 2025 00:00:00 GMT'),
+                    ],
+                ],
+                'IsTruncated' => false,
+            ]);
+        $httpClient->expects($this->once())
+            ->method('get')
+            ->with('https://media.example.com/catalog/product/a/b/image.jpg');
         $httpClient->method('getStatus')->willReturn(200);
-        $httpClient->method('getHeaders')->willReturnOnConsecutiveCalls(
-            ['Last-Modified' => 'Sat, 01 Jan 2025 00:00:00 GMT'],
+        $httpClient->method('getHeaders')->willReturn(
             ['Last-Modified' => 'Sun, 01 Jun 2025 00:00:00 GMT']
         );
 
@@ -148,10 +163,22 @@ class R2Test extends TestCase
         $httpClient = $this->createMock(HttpClient::class);
         $r2 = $this->createR2WithCdnUrl($httpClient);
 
-        $httpClient->expects($this->exactly(2))->method('get');
+        $this->s3Client->expects($this->once())
+            ->method('listObjectsV2')
+            ->willReturn([
+                'Contents' => [
+                    [
+                        'Key' => 'catalog/product/cache/abc123/a/b/image.jpg',
+                        'LastModified' => new \DateTimeImmutable('Sun, 01 Jun 2025 00:00:00 GMT'),
+                    ],
+                ],
+                'IsTruncated' => false,
+            ]);
+        $httpClient->expects($this->once())
+            ->method('get')
+            ->with('https://media.example.com/catalog/product/a/b/image.jpg');
         $httpClient->method('getStatus')->willReturn(200);
-        $httpClient->method('getHeaders')->willReturnOnConsecutiveCalls(
-            ['Last-Modified' => 'Sun, 01 Jun 2025 00:00:00 GMT'],
+        $httpClient->method('getHeaders')->willReturn(
             ['Last-Modified' => 'Sat, 01 Jan 2025 00:00:00 GMT']
         );
 
@@ -179,12 +206,22 @@ class R2Test extends TestCase
         $httpClient = $this->createMock(HttpClient::class);
         $r2 = $this->createR2WithCdnUrl($httpClient);
 
-        $httpClient->expects($this->exactly(2))->method('get');
-        // Variant exists, original returns 404
-        $httpClient->method('getStatus')->willReturnOnConsecutiveCalls(200, 404);
-        $httpClient->method('getHeaders')->willReturn(
-            ['Last-Modified' => 'Sat, 01 Jan 2025 00:00:00 GMT']
-        );
+        $this->s3Client->expects($this->once())
+            ->method('listObjectsV2')
+            ->willReturn([
+                'Contents' => [
+                    [
+                        'Key' => 'catalog/product/cache/abc123/a/b/image.jpg',
+                        'LastModified' => new \DateTimeImmutable('Sat, 01 Jan 2025 00:00:00 GMT'),
+                    ],
+                ],
+                'IsTruncated' => false,
+            ]);
+        // Variant exists, original returns 404.
+        $httpClient->expects($this->once())
+            ->method('get')
+            ->with('https://media.example.com/catalog/product/a/b/image.jpg');
+        $httpClient->method('getStatus')->willReturn(404);
 
         $this->assertTrue(
             $r2->fileExists('catalog/product/cache/abc123/a/b/image.jpg')

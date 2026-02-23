@@ -22,6 +22,8 @@ use Psr\Log\LoggerInterface;
  */
 class R2 extends DataObject
 {
+    private const CATALOG_CACHE_HASH_PREFIX_REGEX = '#^(catalog/product/cache/[^/]+)/#';
+
     private ?string $mediaBaseDirectory = null;
     private Config $config;
     private MediaHelper $mediaHelper;
@@ -35,6 +37,8 @@ class R2 extends DataObject
     private VariantStalenessChecker $stalenessChecker;
     private array $errors = [];
     private ?array $storageData = null;
+    /** @var array<string,array<string,int|null>|null> */
+    private array $catalogCacheIndexByPrefix = [];
 
     public function __construct(
         Config $config,
@@ -235,6 +239,7 @@ class R2 extends DataObject
 
         try {
             $this->client->putObject($this->buildPutObjectParams($path, $file['content']));
+            $this->upsertCatalogCacheIndex($path);
         } catch (AwsException $exception) {
             $this->logger->critical($exception->getMessage());
             throw new LocalizedException(__('Unable to save file "%1"', $path));
@@ -245,9 +250,27 @@ class R2 extends DataObject
 
     public function fileExists($filePath): bool
     {
+        $filePath = ltrim((string)$filePath, '/');
         $baseMediaUrl = $this->config->getBaseMediaUrl();
+
+        $catalogCacheHashPrefix = $this->extractCatalogCacheHashPrefix($filePath);
+        if ($catalogCacheHashPrefix !== null) {
+            $indexedVariantModified = $this->getIndexedCatalogCacheVariantModified($catalogCacheHashPrefix, $filePath);
+            if ($indexedVariantModified !== null) {
+                if ($baseMediaUrl !== '' && $this->stalenessChecker->isStale($filePath, $baseMediaUrl, $indexedVariantModified)) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            if ($this->isCatalogCacheIndexLoaded($catalogCacheHashPrefix)) {
+                return false;
+            }
+        }
+
         if ($baseMediaUrl !== '') {
-            $cdnUrl = $baseMediaUrl . '/' . ltrim($filePath, '/');
+            $cdnUrl = $baseMediaUrl . '/' . $filePath;
             try {
                 $this->httpClient->setTimeout(5);
                 $this->httpClient->setOption(CURLOPT_NOBODY, true);
@@ -310,6 +333,7 @@ class R2 extends DataObject
 
     public function deleteFile($path): bool
     {
+        $path = ltrim((string)$path, '/');
         $key = $this->keyFormatter->toKey($path);
 
         try {
@@ -317,6 +341,7 @@ class R2 extends DataObject
                 'Bucket' => $this->getBucket(),
                 'Key' => $key,
             ]);
+            $this->removeFromCatalogCacheIndex($path);
             return true;
         } catch (AwsException $exception) {
             $this->logger->critical($exception->getMessage());
@@ -579,6 +604,121 @@ class R2 extends DataObject
                 ],
             ]);
 
+            foreach ($chunk as $key) {
+                $this->removeFromCatalogCacheIndex((string)$key);
+            }
         }
+    }
+
+    private function extractCatalogCacheHashPrefix(string $filePath): ?string
+    {
+        if (preg_match(self::CATALOG_CACHE_HASH_PREFIX_REGEX, $filePath, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    private function getIndexedCatalogCacheVariantModified(string $catalogCacheHashPrefix, string $filePath): ?int
+    {
+        $index = $this->getCatalogCacheIndex($catalogCacheHashPrefix);
+        if ($index === null) {
+            return null;
+        }
+
+        return $index[$filePath] ?? null;
+    }
+
+    private function isCatalogCacheIndexLoaded(string $catalogCacheHashPrefix): bool
+    {
+        return array_key_exists($catalogCacheHashPrefix, $this->catalogCacheIndexByPrefix)
+            && is_array($this->catalogCacheIndexByPrefix[$catalogCacheHashPrefix]);
+    }
+
+    /**
+     * @return array<string,int|null>|null
+     */
+    private function getCatalogCacheIndex(string $catalogCacheHashPrefix): ?array
+    {
+        if (!array_key_exists($catalogCacheHashPrefix, $this->catalogCacheIndexByPrefix)) {
+            try {
+                $this->catalogCacheIndexByPrefix[$catalogCacheHashPrefix] = $this->buildCatalogCacheIndex(
+                    $catalogCacheHashPrefix
+                );
+            } catch (AwsException $exception) {
+                $this->catalogCacheIndexByPrefix[$catalogCacheHashPrefix] = null;
+            }
+        }
+
+        return $this->catalogCacheIndexByPrefix[$catalogCacheHashPrefix];
+    }
+
+    /**
+     * @return array<string,int|null>
+     */
+    private function buildCatalogCacheIndex(string $catalogCacheHashPrefix): array
+    {
+        $params = $this->buildListParams($this->buildKeyPrefix($catalogCacheHashPrefix));
+        $index = [];
+        do {
+            $result = $this->client->listObjectsV2($params);
+            if (!is_array($result)) {
+                break;
+            }
+            if (!empty($result['Contents'])) {
+                foreach ($result['Contents'] as $object) {
+                    if (!isset($object['Key'])) {
+                        continue;
+                    }
+
+                    $relativePath = $this->keyFormatter->fromKey((string)$object['Key']);
+                    if ($relativePath === '' || substr($relativePath, -1) === '/') {
+                        continue;
+                    }
+
+                    $index[$relativePath] = $this->extractLastModifiedTimestamp($object);
+                }
+            }
+
+            $params['ContinuationToken'] = $result['NextContinuationToken'] ?? null;
+        } while (!empty($result['IsTruncated']));
+
+        return $index;
+    }
+
+    private function upsertCatalogCacheIndex(string $filePath): void
+    {
+        $catalogCacheHashPrefix = $this->extractCatalogCacheHashPrefix($filePath);
+        if ($catalogCacheHashPrefix === null || !$this->isCatalogCacheIndexLoaded($catalogCacheHashPrefix)) {
+            return;
+        }
+
+        $this->catalogCacheIndexByPrefix[$catalogCacheHashPrefix][$filePath] = time();
+    }
+
+    private function removeFromCatalogCacheIndex(string $filePath): void
+    {
+        $filePath = ltrim($filePath, '/');
+        $catalogCacheHashPrefix = $this->extractCatalogCacheHashPrefix($filePath);
+        if ($catalogCacheHashPrefix === null || !$this->isCatalogCacheIndexLoaded($catalogCacheHashPrefix)) {
+            return;
+        }
+
+        unset($this->catalogCacheIndexByPrefix[$catalogCacheHashPrefix][$filePath]);
+    }
+
+    private function extractLastModifiedTimestamp(array $object): ?int
+    {
+        if (!isset($object['LastModified'])) {
+            return null;
+        }
+
+        $lastModified = $object['LastModified'];
+        if ($lastModified instanceof \DateTimeInterface) {
+            return $lastModified->getTimestamp();
+        }
+
+        $timestamp = strtotime((string)$lastModified);
+        return $timestamp !== false ? $timestamp : null;
     }
 }

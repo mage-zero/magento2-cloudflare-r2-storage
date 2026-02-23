@@ -6,46 +6,36 @@ use Magento\Framework\HTTP\ClientInterface as HttpClient;
 class VariantStalenessChecker
 {
     private HttpClient $httpClient;
+    /** @var array<string,int|null> */
+    private array $lastModifiedCache = [];
 
     public function __construct(HttpClient $httpClient)
     {
         $this->httpClient = $httpClient;
     }
 
-    public function isStale(string $filePath, string $baseMediaUrl): bool
+    public function isStale(string $filePath, string $baseMediaUrl, ?int $variantModified = null): bool
     {
         $originalPath = $this->extractOriginalPath($filePath);
         if ($originalPath === null) {
             return false;
         }
 
-        $variantModified = $this->getLastModifiedHeader();
+        $variantModified = $variantModified ?? $this->getLastModifiedHeader();
         if ($variantModified === null) {
             return false;
         }
 
-        try {
-            $originalUrl = $baseMediaUrl . '/' . ltrim($originalPath, '/');
-            $this->httpClient->setTimeout(5);
-            $this->httpClient->setOption(CURLOPT_NOBODY, true);
-            $this->httpClient->get($originalUrl);
-
-            if ($this->httpClient->getStatus() !== 200) {
-                return false;
-            }
-
-            $originalModified = $this->getLastModifiedHeader();
-            if ($originalModified === null) {
-                return false;
-            }
-
-            return $originalModified > $variantModified;
-        } catch (\Exception $e) {
+        $originalUrl = $baseMediaUrl . '/' . ltrim($originalPath, '/');
+        $originalModified = $this->getLastModified($originalUrl);
+        if ($originalModified === null) {
             return false;
         }
+
+        return $originalModified > $variantModified;
     }
 
-    private function extractOriginalPath(string $cachePath): ?string
+    public function extractOriginalPath(string $cachePath): ?string
     {
         if (preg_match('#^(catalog/product)/cache/[^/]+/(.+)$#', $cachePath, $matches)) {
             return $matches[1] . '/' . $matches[2];
@@ -53,12 +43,39 @@ class VariantStalenessChecker
         return null;
     }
 
+    public function getLastModified(string $url): ?int
+    {
+        if (array_key_exists($url, $this->lastModifiedCache)) {
+            return $this->lastModifiedCache[$url];
+        }
+
+        try {
+            $this->httpClient->setTimeout(5);
+            $this->httpClient->setOption(CURLOPT_NOBODY, true);
+            $this->httpClient->get($url);
+
+            if ($this->httpClient->getStatus() !== 200) {
+                $this->lastModifiedCache[$url] = null;
+                return null;
+            }
+
+            $this->lastModifiedCache[$url] = $this->getLastModifiedHeader();
+            return $this->lastModifiedCache[$url];
+        } catch (\Exception $e) {
+            $this->lastModifiedCache[$url] = null;
+            return null;
+        }
+    }
+
     private function getLastModifiedHeader(): ?int
     {
         $headers = $this->httpClient->getHeaders();
         foreach ($headers as $name => $value) {
             if (strtolower((string)$name) === 'last-modified') {
-                $timestamp = strtotime($value);
+                if (is_array($value)) {
+                    $value = (string)reset($value);
+                }
+                $timestamp = strtotime((string)$value);
                 return $timestamp !== false ? $timestamp : null;
             }
         }
