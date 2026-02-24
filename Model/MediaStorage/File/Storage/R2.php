@@ -257,6 +257,7 @@ class R2 extends DataObject
 
     /**
      * @SuppressWarnings(PHPMD.CyclomaticComplexity)
+     * @SuppressWarnings(PHPMD.NPathComplexity)
      */
     public function fileExists($filePath): bool
     {
