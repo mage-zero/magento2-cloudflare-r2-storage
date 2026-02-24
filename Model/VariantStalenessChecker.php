@@ -5,6 +5,8 @@ use Magento\Framework\HTTP\ClientInterface as HttpClient;
 
 class VariantStalenessChecker
 {
+    private const HTTP_HEAD_USER_AGENT = 'magezero-r2-media-check/1.0';
+
     private HttpClient $httpClient;
     /** @var array<string,int|null> */
     private array $lastModifiedCache = [];
@@ -50,8 +52,7 @@ class VariantStalenessChecker
         }
 
         try {
-            $this->httpClient->setTimeout(5);
-            $this->httpClient->setOption(CURLOPT_NOBODY, true);
+            $this->configureHeadRequest();
             $this->httpClient->get($url);
 
             if ($this->httpClient->getStatus() !== 200) {
@@ -65,6 +66,14 @@ class VariantStalenessChecker
             $this->lastModifiedCache[$url] = null;
             return null;
         }
+    }
+
+    private function configureHeadRequest(): void
+    {
+        $this->httpClient->setTimeout(5);
+        $this->httpClient->setOption(CURLOPT_NOBODY, true);
+        $this->httpClient->setOption(CURLOPT_USERAGENT, self::HTTP_HEAD_USER_AGENT);
+        $this->httpClient->setOption(CURLOPT_HTTPHEADER, ['Accept: */*']);
     }
 
     private function getLastModifiedHeader(): ?int

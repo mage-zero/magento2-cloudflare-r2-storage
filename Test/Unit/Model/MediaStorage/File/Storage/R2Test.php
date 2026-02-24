@@ -197,6 +197,21 @@ class R2Test extends TestCase
         );
     }
 
+    public function testFileExistsCachesNonCacheCdnResultWithinProcess(): void
+    {
+        $httpClient = $this->createMock(HttpClient::class);
+        $r2 = $this->createR2WithCdnUrl($httpClient);
+
+        $httpClient->expects($this->once())
+            ->method('get')
+            ->with('https://media.example.com/catalog/product/a/b/image.jpg');
+        $httpClient->method('getStatus')->willReturn(200);
+        $this->s3Client->expects($this->never())->method('headObject');
+
+        $this->assertTrue($r2->fileExists('catalog/product/a/b/image.jpg'));
+        $this->assertTrue($r2->fileExists('catalog/product/a/b/image.jpg'));
+    }
+
     public function testFileExistsTreatsMissingOriginalAsFresh(): void
     {
         $httpClient = $this->createMock(HttpClient::class);

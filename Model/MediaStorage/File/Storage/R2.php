@@ -24,6 +24,7 @@ use Psr\Log\LoggerInterface;
 class R2 extends DataObject
 {
     private const CATALOG_CACHE_HASH_PREFIX_REGEX = '#^(catalog/product/cache/[^/]+)/#';
+    private const HTTP_HEAD_USER_AGENT = 'magezero-r2-media-check/1.0';
 
     private ?string $mediaBaseDirectory = null;
     private Config $config;
@@ -38,6 +39,8 @@ class R2 extends DataObject
     private VariantStalenessChecker $stalenessChecker;
     private array $errors = [];
     private ?array $storageData = null;
+    /** @var array<string,bool> */
+    private array $fileExistsCache = [];
     /** @var array<string,array<string,int|null>|null> */
     private array $catalogCacheIndexByPrefix = [];
 
@@ -186,6 +189,8 @@ class R2 extends DataObject
                 $path = $this->buildPathFromFile($file);
                 $this->logger->info('R2 Storage: uploading file ' . $path);
                 $this->client->putObject($this->buildPutObjectParams($path, $file['content'] ?? ''));
+                $this->fileExistsCache[$path] = true;
+                $this->upsertCatalogCacheIndex($path);
             } catch (AwsException $exception) {
                 $this->errors[] = $exception->getMessage();
                 $this->logger->critical($exception->getMessage());
@@ -240,6 +245,7 @@ class R2 extends DataObject
 
         try {
             $this->client->putObject($this->buildPutObjectParams($path, $file['content']));
+            $this->fileExistsCache[$path] = true;
             $this->upsertCatalogCacheIndex($path);
         } catch (AwsException $exception) {
             $this->logger->critical($exception->getMessage());
@@ -258,6 +264,10 @@ class R2 extends DataObject
         $baseMediaUrl = $this->config->getBaseMediaUrl();
 
         $catalogCacheHashPrefix = $this->extractCatalogCacheHashPrefix($filePath);
+        if ($catalogCacheHashPrefix === null && array_key_exists($filePath, $this->fileExistsCache)) {
+            return $this->fileExistsCache[$filePath];
+        }
+
         if ($catalogCacheHashPrefix !== null) {
             $indexedVariantModified = $this->getIndexedCatalogCacheVariantModified($catalogCacheHashPrefix, $filePath);
             if ($indexedVariantModified !== null) {
@@ -276,11 +286,13 @@ class R2 extends DataObject
         if ($baseMediaUrl !== '') {
             $cdnUrl = $baseMediaUrl . '/' . $filePath;
             try {
-                $this->httpClient->setTimeout(5);
-                $this->httpClient->setOption(CURLOPT_NOBODY, true);
+                $this->configureHeadRequest();
                 $this->httpClient->get($cdnUrl);
 
                 if ($this->httpClient->getStatus() !== 200) {
+                    if ($catalogCacheHashPrefix === null) {
+                        $this->fileExistsCache[$filePath] = false;
+                    }
                     return false;
                 }
 
@@ -289,6 +301,9 @@ class R2 extends DataObject
                     return false;
                 }
 
+                if ($catalogCacheHashPrefix === null) {
+                    $this->fileExistsCache[$filePath] = true;
+                }
                 return true;
             } catch (\Exception $e) {
                 // Fall through to S3 headObject
@@ -301,8 +316,14 @@ class R2 extends DataObject
                 'Bucket' => $this->getBucket(),
                 'Key' => $key,
             ]);
+            if ($catalogCacheHashPrefix === null) {
+                $this->fileExistsCache[$filePath] = true;
+            }
             return true;
         } catch (AwsException $exception) {
+            if ($catalogCacheHashPrefix === null) {
+                $this->fileExistsCache[$filePath] = false;
+            }
             return false;
         }
     }
@@ -318,6 +339,7 @@ class R2 extends DataObject
                 'CopySource' => $this->getBucket() . '/' . $sourceKey,
                 'Key' => $targetKey,
             ]);
+            $this->fileExistsCache[ltrim((string)$newFilePath, '/')] = true;
             return true;
         } catch (AwsException $exception) {
             $this->logger->critical($exception->getMessage());
@@ -345,6 +367,7 @@ class R2 extends DataObject
                 'Bucket' => $this->getBucket(),
                 'Key' => $key,
             ]);
+            unset($this->fileExistsCache[$path]);
             $this->removeFromCatalogCacheIndex($path);
             return true;
         } catch (AwsException $exception) {
@@ -609,6 +632,7 @@ class R2 extends DataObject
             ]);
 
             foreach ($chunk as $key) {
+                unset($this->fileExistsCache[(string)$key]);
                 $this->removeFromCatalogCacheIndex((string)$key);
             }
         }
@@ -724,5 +748,13 @@ class R2 extends DataObject
 
         $timestamp = strtotime((string)$lastModified);
         return $timestamp !== false ? $timestamp : null;
+    }
+
+    private function configureHeadRequest(): void
+    {
+        $this->httpClient->setTimeout(5);
+        $this->httpClient->setOption(CURLOPT_NOBODY, true);
+        $this->httpClient->setOption(CURLOPT_USERAGENT, self::HTTP_HEAD_USER_AGENT);
+        $this->httpClient->setOption(CURLOPT_HTTPHEADER, ['Accept: */*']);
     }
 }
